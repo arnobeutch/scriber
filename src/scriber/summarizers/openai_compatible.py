@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import sys
 from typing import TYPE_CHECKING
 
 import openai
@@ -14,8 +15,34 @@ from .base import analyze_sentiment
 from .modes import get_prompt, resolve_mode
 
 if TYPE_CHECKING:
+    from collections.abc import Iterable
+
+    from openai.types.chat import ChatCompletionChunk
+
     from scriber.model import Transcript
     from scriber.settings import Settings
+
+
+def _consume_stream(stream: Iterable[ChatCompletionChunk]) -> str:
+    """Pull chunks from a streaming Chat Completions call, echo to stdout.
+
+    Writes the raw token text directly to stdout as it arrives (stdout is
+    the summary "loading bar") and accumulates the full content for the
+    caller. A trailing newline is written after the stream ends.
+    """
+    pieces: list[str] = []
+    for chunk in stream:
+        if not chunk.choices:
+            continue
+        delta = chunk.choices[0].delta.content or ""
+        if not delta:
+            continue
+        pieces.append(delta)
+        sys.stdout.write(delta)
+        sys.stdout.flush()
+    sys.stdout.write("\n")
+    sys.stdout.flush()
+    return "".join(pieces)
 
 
 class OpenAICompatibleSummarizer:
@@ -61,13 +88,15 @@ class OpenAICompatibleSummarizer:
 
         try:
             client = self._build_client()
-            response = client.chat.completions.create(
+            stream = client.chat.completions.create(
                 model=self._model_name(),
                 messages=[
                     {"role": "system", "content": self.DEFAULT_SYSTEM_PROMPT},
                     {"role": "user", "content": prompt},
                 ],
+                stream=True,
             )
+            content = _consume_stream(stream)
         except openai.AuthenticationError:
             my_logger.exception("AuthenticationError while performing API request")
             return
@@ -80,8 +109,7 @@ class OpenAICompatibleSummarizer:
             )
             return
 
-        content = response.choices[0].message.content
-        if content is None:
+        if not content:
             my_logger.error("LLM returned empty content")
             return
 

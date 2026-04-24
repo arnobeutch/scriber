@@ -94,10 +94,22 @@ class TestMakeSummarizer:
 
 class TestOpenAISummarizer:
     def _mock_client(self, content: str | None = "summary body") -> MagicMock:
+        """Mock an OpenAI client that streams ``content`` chunk-by-chunk.
+
+        ``content=None`` simulates a stream that yields no text (tests the
+        \"empty content\" error path).
+        """
         client = MagicMock()
-        response = MagicMock()
-        response.choices[0].message.content = content
-        client.chat.completions.create.return_value = response
+
+        def make_chunks(text: str | None) -> list[MagicMock]:
+            chunks: list[MagicMock] = []
+            for piece in (text or "").splitlines(keepends=True) or [""]:
+                chunk = MagicMock()
+                chunk.choices[0].delta.content = piece
+                chunks.append(chunk)
+            return chunks
+
+        client.chat.completions.create.return_value = iter(make_chunks(content))
         return client
 
     def test_writes_summary_file(self, tmp_path: Path) -> None:
