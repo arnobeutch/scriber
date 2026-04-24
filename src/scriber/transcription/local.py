@@ -116,6 +116,7 @@ def transcribe_audio_full(
         audio_file,
         fp16=(device == "cuda"),
         language=used_lang,
+        verbose=False,  # enables whisper's tqdm progress bar
     )
     segments = cast(list[dict[str, Any]], result.get("segments", []))
     return cast(str, result["text"]), used_lang, segments
@@ -254,7 +255,12 @@ def transcribe_audio_with_diarization(
     # Group segments from the same speaker
     grouped_segments = group_speaker_segments(filtered_segments, max_gap=_MAX_SPEAKER_GAP)
     full_text: list[str] = []
-    for speaker, segment in grouped_segments:
+    progress: tqdm[Any] = tqdm(
+        grouped_segments,
+        desc="Transcribing segments",
+        unit="seg",
+    )
+    for speaker, segment in progress:
         # Skip segments that are too short (silence or noise)
         if segment.end - segment.start < MIN_SEGMENT_DURATION:
             continue

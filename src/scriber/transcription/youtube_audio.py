@@ -99,6 +99,8 @@ def download_youtube_audio(
 
     my_logger.info(f"Downloading audio from {url}")
 
+    # Let yt-dlp stream its native progress line to stdout — long downloads
+    # are opaque without it. Warnings and non-progress chatter stay silenced.
     opts: Any = {
         "format": "bestaudio/best",
         "outtmpl": str(output_dir / "%(id)s.%(ext)s"),
@@ -109,9 +111,9 @@ def download_youtube_audio(
                 "preferredquality": "192",
             },
         ],
-        "quiet": True,
+        "quiet": False,
         "no_warnings": True,
-        "noprogress": True,
+        "noprogress": False,
     }
     with yt_dlp.YoutubeDL(opts) as ydl:
         info = cast(dict[str, Any], ydl.extract_info(url, download=True))
