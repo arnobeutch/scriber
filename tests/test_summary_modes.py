@@ -39,15 +39,24 @@ class TestGetPrompt:
 
     def test_source_en_has_expected_headers(self) -> None:
         out = get_prompt("source", "en")
-        assert "TL;DR:" in out
-        assert "Key takeaways:" in out
-        assert "Counterpoints / alternatives:" in out
+        assert "Summary:" in out
+        assert "Main claims:" in out
+        assert "Factually correct:" in out
+        assert "Likely but unconfirmed:" in out
+        assert "Interpretation or weakly substantiated:" in out
+        assert "Alternative interpretations:" in out
+        assert "Wrong or misleading:" in out
+        assert "Keywords:" in out
 
     def test_source_fr_has_expected_headers(self) -> None:
         out = get_prompt("source", "fr")
-        assert "TL;DR :" in out
-        assert "Points clés :" in out
-        assert "Contrepoints / alternatives :" in out
+        assert "Résumé :" in out
+        assert "Thèses principales :" in out
+        assert "Factuellement correct :" in out
+        assert "Probable mais non confirmé :" in out
+        assert "Interprétation ou faiblement étayé :" in out
+        assert "Interprétations alternatives :" in out
+        assert "Faux ou trompeur :" in out
 
     def test_unsupported_language(self) -> None:
         with pytest.raises(ValueError, match="language not supported"):

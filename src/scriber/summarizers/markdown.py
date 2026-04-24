@@ -7,7 +7,12 @@ import re
 from typing import TYPE_CHECKING
 from urllib.parse import parse_qs, urlencode, urlparse, urlunparse
 
-from scriber.constants import SECTION_HEADERS, SECTION_KEYS, SECTION_LABELS
+from scriber.constants import (
+    FRONTMATTER_ONLY_KEYS,
+    SECTION_HEADERS,
+    SECTION_KEYS,
+    SECTION_LABELS,
+)
 from scriber.logger import my_logger
 
 if TYPE_CHECKING:
@@ -161,6 +166,16 @@ def _build_frontmatter(
     return ["---", *(f"{k}: {v}" for k, v in fields), "---", ""]
 
 
+def _parse_keywords(raw: str) -> list[str]:
+    """Split the model's comma-separated Keywords line into a clean list."""
+    return [part.strip() for part in raw.split(",") if part.strip()]
+
+
+def _parse_tags(raw: str) -> list[str]:
+    """Split the model's Tags line into a clean list, keeping ``#`` prefixes."""
+    return [part.strip() for part in raw.split() if part.strip()]
+
+
 def format_summary_markdown(
     raw_summary: str,
     transcript: Transcript,
@@ -193,11 +208,24 @@ def format_summary_markdown(
 
         ## Sentiment
         <sentiment>  (omitted when sentiment is None)
+
+    ``keywords`` / ``tags`` are extracted from the LLM output when present
+    in the schema and routed to the frontmatter (not rendered as visible
+    sections). Any caller-supplied values override what the model emitted.
     """
     my_logger.debug("Formatting summary markdown...")
     language = transcript.language
     headers = SECTION_HEADERS[mode][language]
     sections = extract_sections(raw_summary, mode, language)
+
+    # Pull keywords / tags from the model output if they're in this mode's
+    # schema. Caller-supplied values win when provided.
+    model_keywords: list[str] = []
+    model_tags: list[str] = []
+    if "keywords" in sections:
+        model_keywords = _parse_keywords(sections["keywords"])
+    if "tags" in sections:
+        model_tags = _parse_tags(sections["tags"])
 
     lines = _build_frontmatter(
         transcript,
@@ -205,8 +233,8 @@ def format_summary_markdown(
         sentiment=sentiment,
         processing_date=processing_date or dt.datetime.now(tz=dt.UTC).date().isoformat(),
         mode=mode,
-        keywords=keywords or [],
-        tags=tags or [],
+        keywords=list(keywords) if keywords is not None else model_keywords,
+        tags=list(tags) if tags is not None else model_tags,
     )
 
     title_line = f"{_TITLE_PREFIXES[mode][language]} — {transcript.title}"
@@ -219,6 +247,8 @@ def format_summary_markdown(
         lines.extend(_render_chapters_section(transcript.chapters, source_path, language))
 
     for key in SECTION_KEYS[mode]:
+        if key in FRONTMATTER_ONLY_KEYS:
+            continue
         lines.append(headers[key])
         lines.append(clean_section(sections.get(key, ""), language))
         lines.append("")

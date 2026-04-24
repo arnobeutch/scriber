@@ -117,13 +117,15 @@ class TestOpenAISummarizer:
         summarizer = OpenAISummarizer(s)
         # Structured source-mode content so sections survive the formatter.
         structured = (
-            "TL;DR: the body of the summary\n"
-            "Key takeaways:\n- a\n"
-            "Facts:\n- b\n"
-            "Opinions:\n- c\n"
-            "Speculation / unverified:\n- d\n"
-            "Counterpoints / alternatives:\n- e\n"
-            "Information quality / reliability: overall decent\n"
+            "Summary: the body of the summary\n"
+            "Main claims:\n1. a\n2. b\n3. c\n"
+            "Factually correct:\n- F1\n"
+            "Likely but unconfirmed:\n- L1\n"
+            "Interpretation or weakly substantiated:\n- I1\n"
+            "Alternative interpretations:\n- A1\n"
+            "Wrong or misleading:\n- None identified\n"
+            "Keywords: foo, bar\n"
+            "Tags: #ml #research\n"
         )
         with patch(
             "scriber.summarizers.openai_compatible.OpenAI",
@@ -134,7 +136,7 @@ class TestOpenAISummarizer:
         assert out.exists()
         text = out.read_text()
         assert "# Summary — vid" in text
-        assert "## TL;DR" in text
+        assert "## Summary" in text
         assert "the body of the summary" in text
         assert "## Sentiment" in text
 
@@ -146,8 +148,9 @@ class TestOpenAISummarizer:
             summarizer.summarize(_transcript(language="fr", title="vidfr"), input_path="u")
         _, kwargs = client.chat.completions.create.call_args
         prompt = kwargs["messages"][1]["content"]
-        # FR source prompt uses "TL;DR :" header.
-        assert "TL;DR :" in prompt
+        # FR source prompt uses the "Résumé :" / "Thèses principales :" headers.
+        assert "Résumé :" in prompt
+        assert "Thèses principales :" in prompt
 
     def test_meeting_mode_uses_meeting_prompt(self, tmp_path: Path) -> None:
         s = _settings(output_dir=tmp_path / "out", summary_mode="meeting")

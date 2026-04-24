@@ -78,23 +78,26 @@ _MEETING_PHRASES: dict[str, dict[str, str]] = {
     },
 }
 
-# Note the ``Topic`` mini-intro uses the word "TL;DR" which contains no
-# literal ``{}`` braces, so it is safe inside ``str.format``.
 _SOURCE_TEMPLATE = """\
 {intro}
 
-TL;DR{colon} {tldr_hint}
-{key_takeaways_label}{colon}
-- {bullet}
-{facts_label}{colon}
-- {facts_hint}
-{opinions_label}{colon}
-- {opinions_hint}
-{speculation_label}{colon}
-- {speculation_hint}
-{counterpoints_label}{colon}
-- {counterpoints_hint}
-{reliability_label}{colon} {reliability_hint}
+{summary_label}{colon} {summary_hint}
+{claims_label}{colon}
+1. {claim_hint}
+2. {claim_hint}
+3. {claim_hint}
+{factual_label}{colon}
+- {factual_hint}
+{likely_label}{colon}
+- {likely_hint}
+{interpretation_label}{colon}
+- {interpretation_hint}
+{alternatives_label}{colon}
+- {alternatives_hint}
+{wrong_label}{colon}
+- {wrong_hint}
+{keywords_label}{colon} {keywords_hint}
+{tags_label}{colon} {tags_hint}
 
 {transcript_label}{colon}
 """
@@ -105,26 +108,32 @@ _SOURCE_PHRASES: dict[str, dict[str, str]] = {
             "You are an expert critical summarizer. The transcript below is from a\n"
             "single source (lecture, interview, article reading, commentary). Produce\n"
             "a structured summary in English with these sections (use the exact\n"
-            "headers, in this order):"
+            "headers, in this order). Categorize every substantive claim into exactly\n"
+            "one of the four epistemic buckets (Factually correct / Likely but\n"
+            "unconfirmed / Interpretation or weakly substantiated / Wrong or\n"
+            'misleading). If a bucket has nothing to report, write "None identified".'
         ),
         "colon": ":",
-        "tldr_hint": "<2-3 sentences>",
-        "key_takeaways_label": "Key takeaways",
-        "bullet": "<bullet>",
-        "facts_label": "Facts",
-        "facts_hint": "<claim> — supported by [observation/citation/data referenced in the source]",
-        "opinions_label": "Opinions",
-        "opinions_hint": "<claim> — speaker/author's opinion (no external evidence offered)",
-        "speculation_label": "Speculation / unverified",
-        "speculation_hint": "<claim> — speaker speculates or asserts without support",
-        "counterpoints_label": "Counterpoints / alternatives",
-        "counterpoints_hint": "<alternative perspective the source did not address>",
-        "reliability_label": "Information quality / reliability",
-        "reliability_hint": (
-            "<one short paragraph rating the\n"
-            "source's overall reliability — citations, evidence quality, neutrality,\n"
-            "acknowledged uncertainty>"
+        "summary_label": "Summary",
+        "summary_hint": "<1-2 sentence overview of what the source argues>",
+        "claims_label": "Main claims",
+        "claim_hint": "<claim>",
+        "factual_label": "Factually correct",
+        "factual_hint": (
+            "<claim> — supported by <observation/citation/data referenced in the source>"
         ),
+        "likely_label": "Likely but unconfirmed",
+        "likely_hint": "<claim> — <why plausible, without independent confirmation>",
+        "interpretation_label": "Interpretation or weakly substantiated",
+        "interpretation_hint": "<claim> — <evidence weakness>",
+        "alternatives_label": "Alternative interpretations",
+        "alternatives_hint": "<alternative reading of one of the weak claims above>",
+        "wrong_label": "Wrong or misleading",
+        "wrong_hint": "<claim> — <why wrong>, or None identified",
+        "keywords_label": "Keywords",
+        "keywords_hint": "<3-5 kebab-case descriptors, comma-separated>",
+        "tags_label": "Tags",
+        "tags_hint": "<3-5 Obsidian hashtags, space-separated, e.g. #ml #research>",
         "transcript_label": "Transcript",
     },
     "fr": {
@@ -132,26 +141,33 @@ _SOURCE_PHRASES: dict[str, dict[str, str]] = {
             "Vous êtes un expert en analyse critique. La transcription ci-dessous\n"
             "provient d'une source unique (cours, interview, lecture d'article,\n"
             "commentaire). Produisez un résumé structuré en français avec ces\n"
-            "sections (utilisez exactement ces en-têtes, dans cet ordre) :"
+            "sections (utilisez exactement ces en-têtes, dans cet ordre). Classez\n"
+            "chaque affirmation substantielle dans exactement une des quatre\n"
+            "catégories épistémiques (Factuellement correct / Probable mais non\n"
+            "confirmé / Interprétation ou faiblement étayé / Faux ou trompeur).\n"
+            "Si une catégorie n'a rien à signaler, écrivez « Aucun identifié »."
         ),
         "colon": " :",
-        "tldr_hint": "<2 à 3 phrases>",
-        "key_takeaways_label": "Points clés",
-        "bullet": "<puce>",
-        "facts_label": "Faits",
-        "facts_hint": "<affirmation> — étayée par [observation/citation/donnée mentionnée]",
-        "opinions_label": "Opinions",
-        "opinions_hint": "<affirmation> — opinion de l'auteur (sans preuve externe avancée)",
-        "speculation_label": "Spéculations / non vérifié",
-        "speculation_hint": "<affirmation> — l'auteur spécule ou affirme sans étayer",
-        "counterpoints_label": "Contrepoints / alternatives",
-        "counterpoints_hint": "<perspective alternative non abordée par la source>",
-        "reliability_label": "Qualité de l'information / fiabilité",
-        "reliability_hint": (
-            "<court paragraphe évaluant la\n"
-            "fiabilité globale — citations, qualité des preuves, neutralité,\n"
-            "incertitudes reconnues>"
+        "summary_label": "Résumé",
+        "summary_hint": "<aperçu en 1-2 phrases de la thèse de la source>",
+        "claims_label": "Thèses principales",
+        "claim_hint": "<thèse>",
+        "factual_label": "Factuellement correct",
+        "factual_hint": (
+            "<affirmation> — étayée par <observation/citation/donnée mentionnée dans la source>"
         ),
+        "likely_label": "Probable mais non confirmé",
+        "likely_hint": "<affirmation> — <pourquoi plausible, sans confirmation indépendante>",
+        "interpretation_label": "Interprétation ou faiblement étayé",
+        "interpretation_hint": "<affirmation> — <faiblesse de la preuve>",
+        "alternatives_label": "Interprétations alternatives",
+        "alternatives_hint": "<lecture alternative d'une des affirmations faibles ci-dessus>",
+        "wrong_label": "Faux ou trompeur",
+        "wrong_hint": "<affirmation> — <pourquoi faux>, ou Aucun identifié",
+        "keywords_label": "Mots-clés",
+        "keywords_hint": "<3-5 descripteurs en kebab-case, séparés par des virgules>",
+        "tags_label": "Tags",
+        "tags_hint": "<3-5 hashtags style Obsidian, séparés par des espaces, ex : #ml #recherche>",
         "transcript_label": "Transcription",
     },
 }

@@ -63,56 +63,70 @@ MEETING_SECTION_HEADERS: dict[str, dict[str, str]] = {
 # --- Source-mode section schema -------------------------------------------
 
 SOURCE_SECTION_KEYS: tuple[str, ...] = (
-    "tldr",
-    "takeaways",
-    "facts",
-    "opinions",
-    "speculation",
-    "counterpoints",
-    "reliability",
+    "summary",
+    "claims",
+    "factual",
+    "likely",
+    "interpretation",
+    "alternatives",
+    "wrong",
+    "keywords",
+    "tags",
 )
 
 SOURCE_SECTION_LABELS: dict[str, dict[str, str]] = {
     "fr": {
-        "tldr": "TL;DR",
-        "takeaways": "Points clés",
-        "facts": "Faits",
-        "opinions": "Opinions",
-        "speculation": "Spéculations / non vérifié",
-        "counterpoints": "Contrepoints / alternatives",
-        "reliability": "Qualité de l'information / fiabilité",
+        "summary": "Résumé",
+        "claims": "Thèses principales",
+        "factual": "Factuellement correct",
+        "likely": "Probable mais non confirmé",
+        "interpretation": "Interprétation ou faiblement étayé",
+        "alternatives": "Interprétations alternatives",
+        "wrong": "Faux ou trompeur",
+        "keywords": "Mots-clés",
+        "tags": "Tags",
     },
     "en": {
-        "tldr": "TL;DR",
-        "takeaways": "Key takeaways",
-        "facts": "Facts",
-        "opinions": "Opinions",
-        "speculation": "Speculation / unverified",
-        "counterpoints": "Counterpoints / alternatives",
-        "reliability": "Information quality / reliability",
+        "summary": "Summary",
+        "claims": "Main claims",
+        "factual": "Factually correct",
+        "likely": "Likely but unconfirmed",
+        "interpretation": "Interpretation or weakly substantiated",
+        "alternatives": "Alternative interpretations",
+        "wrong": "Wrong or misleading",
+        "keywords": "Keywords",
+        "tags": "Tags",
     },
 }
 
 SOURCE_SECTION_HEADERS: dict[str, dict[str, str]] = {
     "fr": {
-        "tldr": "## TL;DR",
-        "takeaways": "## Points clés",
-        "facts": "## Faits",
-        "opinions": "## Opinions",
-        "speculation": "## Spéculations & non vérifié",
-        "counterpoints": "## Contrepoints & alternatives",
-        "reliability": "## Qualité de l'information",
+        "summary": "## Résumé",
+        "claims": "## Thèses principales",
+        "factual": "## Ce qui est factuellement correct",
+        "likely": "## Ce qui est probable mais non confirmé",
+        "interpretation": "## Ce qui relève de l'interprétation ou est faiblement étayé",
+        "alternatives": "### Interprétations alternatives",
+        "wrong": "## Ce qui est faux ou trompeur",
+        "keywords": "",  # rendered only in frontmatter
+        "tags": "",
     },
     "en": {
-        "tldr": "## TL;DR",
-        "takeaways": "## Key Takeaways",
-        "facts": "## Facts",
-        "opinions": "## Opinions",
-        "speculation": "## Speculation & Unverified",
-        "counterpoints": "## Counterpoints & Alternatives",
-        "reliability": "## Information Quality",
+        "summary": "## Summary",
+        "claims": "## Main Claims",
+        "factual": "## What Is Factually Correct",
+        "likely": "## What Is Likely but Unconfirmed",
+        "interpretation": "## What Is Interpretation or Weakly Substantiated",
+        "alternatives": "### Alternative Interpretations",
+        "wrong": "## What Is Wrong or Misleading",
+        "keywords": "",
+        "tags": "",
     },
 }
+
+# Neutral keys that are extracted from the model output but routed to the
+# YAML frontmatter instead of rendered as a visible section body.
+FRONTMATTER_ONLY_KEYS: frozenset[str] = frozenset({"keywords", "tags"})
 
 # --- Combined schema lookup ------------------------------------------------
 

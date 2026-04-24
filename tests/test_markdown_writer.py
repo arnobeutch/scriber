@@ -53,18 +53,23 @@ Action items: Alice writes the spec.
 """
 
 EN_SOURCE_SAMPLE = """
-TL;DR: The author argues that X.
-Key takeaways:
-- One
-Facts:
+Summary: The author argues that X.
+Main claims:
+1. Claim one
+2. Claim two
+3. Claim three
+Factually correct:
 - F1 — supported by the paper
-Opinions:
-- O1 — author opines
-Speculation / unverified:
-- S1 — no evidence
-Counterpoints / alternatives:
-- C1 — alternative view
-Information quality / reliability: Overall well-sourced.
+Likely but unconfirmed:
+- L1 — plausible but no citation
+Interpretation or weakly substantiated:
+- I1 — evidence is weak
+Alternative interpretations:
+- A1 — alternative reading
+Wrong or misleading:
+- W1 — contradicts known data
+Keywords: neural-scaling, transformer-attention, lr-warmup
+Tags: #ml #research #nlp
 """
 
 
@@ -88,13 +93,15 @@ class TestExtractSections:
 
     def test_extracts_all_source_sections_en(self) -> None:
         result = extract_sections(EN_SOURCE_SAMPLE, "source", "en")
-        assert "author argues" in result["tldr"]
-        assert "One" in result["takeaways"]
-        assert "F1" in result["facts"]
-        assert "O1" in result["opinions"]
-        assert "S1" in result["speculation"]
-        assert "C1" in result["counterpoints"]
-        assert "well-sourced" in result["reliability"]
+        assert "author argues" in result["summary"]
+        assert "Claim one" in result["claims"]
+        assert "F1" in result["factual"]
+        assert "L1" in result["likely"]
+        assert "I1" in result["interpretation"]
+        assert "A1" in result["alternatives"]
+        assert "W1" in result["wrong"]
+        assert "neural-scaling" in result["keywords"]
+        assert "#ml" in result["tags"]
 
     def test_language_mismatch_yields_only_shared_labels(self) -> None:
         # Only ``Hashtags`` is spelled identically in FR and EN; everything else
@@ -164,10 +171,23 @@ class TestFormatSummaryMarkdown:
         t = _transcript(title="vid", language="en")
         out = format_summary_markdown(EN_SOURCE_SAMPLE, t, "source")
         assert "# Summary — vid" in out
-        assert "## TL;DR" in out
-        assert "## Facts" in out
-        assert "## Counterpoints & Alternatives" in out
-        assert "## Information Quality" in out
+        assert "## Summary" in out
+        assert "## Main Claims" in out
+        assert "## What Is Factually Correct" in out
+        assert "## What Is Likely but Unconfirmed" in out
+        assert "## What Is Interpretation or Weakly Substantiated" in out
+        assert "### Alternative Interpretations" in out
+        assert "## What Is Wrong or Misleading" in out
+
+    def test_source_en_keywords_and_tags_route_to_frontmatter(self) -> None:
+        t = _transcript(title="vid", language="en")
+        out = format_summary_markdown(EN_SOURCE_SAMPLE, t, "source")
+        # Routed to YAML frontmatter, not rendered as visible sections.
+        assert 'keywords: ["neural-scaling", "transformer-attention", "lr-warmup"]' in out
+        assert 'tags: ["#ml", "#research", "#nlp"]' in out
+        # And the visible body has no ## Keywords / ## Tags header.
+        assert "## Keywords" not in out
+        assert "## Tags" not in out
 
     def test_source_fr_title(self) -> None:
         t = _transcript(title="vid", language="fr")
