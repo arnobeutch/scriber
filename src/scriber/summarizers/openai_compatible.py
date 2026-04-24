@@ -41,14 +41,20 @@ class OpenAICompatibleSummarizer:
         """Return the model id sent in the API call (CLI/env overrides win)."""
         return self.settings.llm_model or self.settings.openai_model
 
-    def summarize(self, transcript: Transcript, *, input_path: str) -> None:
+    def summarize(
+        self,
+        transcript: Transcript,
+        *,
+        input_path: str,
+        context: str | None = None,
+    ) -> None:
         """Send the prompt to the API and write the resulting summary to disk."""
         from typing import cast
 
         from .modes import SummaryMode
 
         mode = resolve_mode(cast(SummaryMode, self.settings.summary_mode), transcript)
-        prompt = get_prompt(mode, transcript.language) + transcript.text
+        prompt = get_prompt(mode, transcript.language, context) + transcript.text
         my_logger.info(f"Summary mode: {mode}")
 
         sentiment = analyze_sentiment(transcript.text)

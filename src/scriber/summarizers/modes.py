@@ -157,17 +157,33 @@ _SOURCE_PHRASES: dict[str, dict[str, str]] = {
 }
 
 
-def get_prompt(mode: ResolvedMode, language: str) -> str:
+_CONTEXT_HEADER: dict[str, str] = {
+    "en": "Additional context",
+    "fr": "Contexte additionnel",
+}
+
+
+def get_prompt(mode: ResolvedMode, language: str, context: str | None = None) -> str:
     """Return the rendered prompt for ``(mode, language)``.
+
+    When ``context`` is a non-empty string, an ``Additional context`` block
+    is inserted just before the ``Transcript:`` marker so the model sees
+    it as auxiliary material alongside the main transcript.
 
     Raises ``ValueError`` for unsupported language.
     """
     if language not in {"en", "fr"}:
         err_msg = f"Summarizer language not supported: {language!r}"
         raise ValueError(err_msg)
-    if mode == "meeting":
-        return _MEETING_TEMPLATE.format(**_MEETING_PHRASES[language])
-    return _SOURCE_TEMPLATE.format(**_SOURCE_PHRASES[language])
+    phrases = _MEETING_PHRASES if mode == "meeting" else _SOURCE_PHRASES
+    template = _MEETING_TEMPLATE if mode == "meeting" else _SOURCE_TEMPLATE
+    rendered = template.format(**phrases[language])
+    if context and context.strip():
+        colon = phrases[language]["colon"]
+        transcript_marker = f"{phrases[language]['transcript_label']}{colon}"
+        block = f"{_CONTEXT_HEADER[language]}{colon}\n{context.strip()}\n\n"
+        rendered = rendered.replace(transcript_marker, block + transcript_marker, 1)
+    return rendered
 
 
 # --- Auto-detect heuristic -------------------------------------------------

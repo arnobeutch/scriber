@@ -21,8 +21,18 @@ class MissingAPIKeyError(Exception):
 class Summarizer(Protocol):
     """Common interface implemented by every summarization backend."""
 
-    def summarize(self, transcript: Transcript, *, input_path: str) -> Path | None:
-        """Produce a markdown summary on disk; return its path when known."""
+    def summarize(
+        self,
+        transcript: Transcript,
+        *,
+        input_path: str,
+        context: str | None = None,
+    ) -> Path | None:
+        """Produce a markdown summary on disk; return its path when known.
+
+        ``context`` carries optional auxiliary material (glossary, briefing
+        notes) injected into the prompt when non-empty.
+        """
 
 
 def analyze_sentiment(text: str) -> str:

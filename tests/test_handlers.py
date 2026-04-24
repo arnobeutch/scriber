@@ -35,6 +35,7 @@ def _args(**overrides: object) -> MagicMock:
         "model_size": None,
         "llm_provider": None,
         "llm_model": None,
+        "context_file": None,
     }
     defaults.update(overrides)
     return MagicMock(**defaults)
@@ -426,4 +427,57 @@ class TestSummarize:
         fake = MagicMock()
         with patch("scriber.handlers.make_summarizer", return_value=fake):
             summarize(t, _args(input_path="u"), s)
-        fake.summarize.assert_called_once_with(t, input_path="u")
+        fake.summarize.assert_called_once_with(t, input_path="u", context=None)
+
+    def test_context_file_read_and_passed(self, tmp_path: Path) -> None:
+        s = _settings(output_dir=tmp_path / "out")
+        ctx_file = tmp_path / "context.txt"
+        ctx_file.write_text("  glossary: foo = bar  \n", encoding="utf-8")
+        t = Transcript(
+            text="body",
+            language="en",
+            title="t",
+            source="file",
+            diarized=False,
+        )
+        fake = MagicMock()
+        with patch("scriber.handlers.make_summarizer", return_value=fake):
+            summarize(t, _args(input_path="u", context_file=ctx_file), s)
+        _, kwargs = fake.summarize.call_args
+        assert kwargs["context"] == "glossary: foo = bar"
+
+    def test_missing_context_file_passes_none(self, tmp_path: Path) -> None:
+        s = _settings(output_dir=tmp_path / "out")
+        t = Transcript(
+            text="body",
+            language="en",
+            title="t",
+            source="file",
+            diarized=False,
+        )
+        fake = MagicMock()
+        with patch("scriber.handlers.make_summarizer", return_value=fake):
+            summarize(
+                t,
+                _args(input_path="u", context_file=tmp_path / "nope.txt"),
+                s,
+            )
+        _, kwargs = fake.summarize.call_args
+        assert kwargs["context"] is None
+
+    def test_empty_context_file_passes_none(self, tmp_path: Path) -> None:
+        s = _settings(output_dir=tmp_path / "out")
+        empty = tmp_path / "empty.txt"
+        empty.write_text("   \n\n", encoding="utf-8")
+        t = Transcript(
+            text="body",
+            language="en",
+            title="t",
+            source="file",
+            diarized=False,
+        )
+        fake = MagicMock()
+        with patch("scriber.handlers.make_summarizer", return_value=fake):
+            summarize(t, _args(input_path="u", context_file=empty), s)
+        _, kwargs = fake.summarize.call_args
+        assert kwargs["context"] is None

@@ -33,10 +33,16 @@ class RagSummarizer:
     def _model_name(self) -> str:
         return self.settings.llm_model or self.settings.ollama_model
 
-    def summarize(self, transcript: Transcript, *, input_path: str) -> Path:
+    def summarize(
+        self,
+        transcript: Transcript,
+        *,
+        input_path: str,
+        context: str | None = None,
+    ) -> Path:
         """Generate a markdown summary on disk for the given transcript."""
         mode = resolve_mode(cast(SummaryMode, self.settings.summary_mode), transcript)
-        prompt = get_prompt(mode, transcript.language)
+        prompt = get_prompt(mode, transcript.language, context)
         my_logger.info(f"Summary mode: {mode}")
 
         my_logger.info("Parsing transcript...")

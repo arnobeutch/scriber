@@ -251,4 +251,20 @@ def write_transcript_file(
 def summarize(transcript: Transcript, args: argparse.Namespace, settings: Settings) -> None:
     """Dispatch to the configured Summarizer backend."""
     summarizer = make_summarizer(settings)
-    summarizer.summarize(transcript, input_path=args.input_path)
+    context = _load_context_file(getattr(args, "context_file", None))
+    summarizer.summarize(transcript, input_path=args.input_path, context=context)
+
+
+def _load_context_file(path: Path | None) -> str | None:
+    """Read the ``--context-file`` contents, or return ``None`` when absent."""
+    if path is None:
+        return None
+    if not path.is_file():
+        my_logger.warning(f"--context-file {path} not found; ignoring.")
+        return None
+    text = path.read_text(encoding="utf-8").strip()
+    if not text:
+        my_logger.warning(f"--context-file {path} is empty; ignoring.")
+        return None
+    my_logger.info(f"Loaded context from {path} ({len(text)} chars)")
+    return text

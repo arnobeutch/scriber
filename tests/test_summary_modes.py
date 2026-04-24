@@ -53,6 +53,24 @@ class TestGetPrompt:
         with pytest.raises(ValueError, match="language not supported"):
             get_prompt("meeting", "de")
 
+    def test_context_injects_before_transcript_marker_en(self) -> None:
+        out = get_prompt("source", "en", context="GlossaryX means Y.")
+        assert "Additional context:" in out
+        assert "GlossaryX means Y." in out
+        # Context must precede the Transcript heading in the rendered prompt.
+        assert out.index("Additional context") < out.index("Transcript:")
+
+    def test_context_injects_before_transcript_marker_fr(self) -> None:
+        out = get_prompt("source", "fr", context="Le projet X est...")
+        assert "Contexte additionnel :" in out
+        assert "Le projet X est..." in out
+        assert out.index("Contexte additionnel") < out.index("Transcription :")
+
+    def test_empty_context_is_ignored(self) -> None:
+        assert "Additional context" not in get_prompt("source", "en", context="")
+        assert "Additional context" not in get_prompt("source", "en", context="   \n\t  ")
+        assert "Additional context" not in get_prompt("source", "en")
+
 
 class TestDetectMode:
     def test_diarized_two_plus_speakers_is_meeting(self) -> None:

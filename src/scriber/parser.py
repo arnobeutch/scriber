@@ -180,6 +180,18 @@ def _add_summarize_args(sub: argparse.ArgumentParser) -> None:
             "or auto (default — heuristic). Default: env SUMMARY_MODE, or 'auto'."
         ),
     )
+    sub.add_argument(
+        "--context-file",
+        dest="context_file",
+        type=Path,
+        default=None,
+        help=(
+            "Path to a plain-text file with extra material (glossary, briefing "
+            "notes, background) to append to the LLM prompt. Useful for "
+            "source-mode summaries that need domain context the transcript "
+            "alone doesn't carry."
+        ),
+    )
 
 
 def parse_args() -> argparse.Namespace:
