@@ -121,6 +121,10 @@ _SOURCE_TEMPLATE = """\
 - {alternatives_hint}
 {wrong_label}{colon}
 - {wrong_hint}
+{applications_label}{colon}
+- {applications_hint}
+{extensions_label}{colon}
+- {extensions_hint}
 {keywords_label}{colon} {keywords_hint}
 {tags_label}{colon} {tags_hint}
 
@@ -163,6 +167,13 @@ _SOURCE_PHRASES: dict[str, dict[str, str]] = {
         "alternatives_hint": "<alternative reading of one of the weak claims above>",
         "wrong_label": "Wrong or misleading",
         "wrong_hint": "<claim> — <why wrong>, or None identified",
+        "applications_label": "Applications / So what",
+        "applications_hint": (
+            "<practical takeaway or actionable implication>. "
+            'If the source is purely descriptive / analytical, write "None identified".'
+        ),
+        "extensions_label": "How to extend",
+        "extensions_hint": ("<suggested follow-up source, research angle, or verification step>"),
         "keywords_label": "Keywords",
         "keywords_hint": "<3-5 kebab-case descriptors, comma-separated>",
         "tags_label": "Tags",
@@ -205,6 +216,13 @@ _SOURCE_PHRASES: dict[str, dict[str, str]] = {
         "alternatives_hint": "<lecture alternative d'une des affirmations faibles ci-dessus>",
         "wrong_label": "Faux ou trompeur",
         "wrong_hint": "<affirmation> — <pourquoi faux>, ou Aucun identifié",
+        "applications_label": "Applications / Et alors",
+        "applications_hint": (
+            "<enseignement pratique ou implication actionnable>. "
+            "Si la source est purement descriptive / analytique, écrire « Aucune identifiée »."
+        ),
+        "extensions_label": "Pistes d'approfondissement",
+        "extensions_hint": ("<source de suivi, angle de recherche ou étape de vérification>"),
         "keywords_label": "Mots-clés",
         "keywords_hint": "<3-5 descripteurs en kebab-case, séparés par des virgules>",
         "tags_label": "Tags",

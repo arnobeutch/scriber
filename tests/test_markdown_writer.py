@@ -72,6 +72,10 @@ Alternative interpretations:
 - A1 — alternative reading
 Wrong or misleading:
 - W1 — contradicts known data
+Applications / So what:
+- Use scaling laws to forecast compute needs
+How to extend:
+- Reproduce experiments with open weights
 Keywords: neural-scaling, transformer-attention, lr-warmup
 Tags: #ml #research #nlp
 """
@@ -106,6 +110,8 @@ class TestExtractSections:
         assert "I1" in result["interpretation"]
         assert "A1" in result["alternatives"]
         assert "W1" in result["wrong"]
+        assert "scaling laws" in result["applications"]
+        assert "open weights" in result["extensions"]
         assert "neural-scaling" in result["keywords"]
         assert "#ml" in result["tags"]
 
@@ -187,6 +193,8 @@ class TestFormatSummaryMarkdown:
         assert "## What Is Interpretation or Weakly Substantiated" in out
         assert "### Alternative Interpretations" in out
         assert "## What Is Wrong or Misleading" in out
+        assert "## Applications / So What?" in out
+        assert "## How to Extend" in out
 
     def test_source_en_keywords_and_tags_route_to_frontmatter(self) -> None:
         t = _transcript(title="vid", language="en")

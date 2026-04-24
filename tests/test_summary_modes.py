@@ -47,6 +47,8 @@ class TestGetPrompt:
         assert "Interpretation or weakly substantiated:" in out
         assert "Alternative interpretations:" in out
         assert "Wrong or misleading:" in out
+        assert "Applications / So what:" in out
+        assert "How to extend:" in out
         assert "Keywords:" in out
 
     def test_source_fr_has_expected_headers(self) -> None:
