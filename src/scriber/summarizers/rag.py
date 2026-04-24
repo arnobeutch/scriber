@@ -23,7 +23,7 @@ class RagSummarizer:
 
     Always uses Ollama; the model id comes from ``settings.llm_model`` if
     set, otherwise ``settings.ollama_model``. Writes a structured-section
-    markdown file (Sujet / Hashtags / ...) plus a sentiment line.
+    markdown file (topic / hashtags / ...) plus a sentiment line.
     """
 
     def __init__(self, settings: Settings) -> None:

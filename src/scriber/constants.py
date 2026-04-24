@@ -87,22 +87,55 @@ Action items:
 - ...
 """
 
-RAG_SECTION_TITLES = {
+# Neutral keys — language-independent identifiers used everywhere
+# downstream (regex extraction, markdown assembly, tests).
+RAG_SECTION_KEYS: tuple[str, ...] = (
+    "topic",
+    "hashtags",
+    "takeaways",
+    "qa",
+    "decisions",
+    "actions",
+)
+
+# Language-specific in-transcript labels the model is asked to emit
+# (used by the regex in markdown.extract_sections).
+RAG_SECTION_LABELS: dict[str, dict[str, str]] = {
     "fr": {
-        "Sujet": "## Sujet de la réunion",
-        "Hashtags": "## #Hashtags",
-        "Principaux enseignements": "## Principaux enseignements",
-        "Questions / Réponses": "## Questions / Réponses",
-        "Décisions": "## Décisions",
-        "Actions à suivre": "## Actions à suivre",
+        "topic": "Sujet",
+        "hashtags": "Hashtags",
+        "takeaways": "Principaux enseignements",
+        "qa": "Questions / Réponses",
+        "decisions": "Décisions",
+        "actions": "Actions à suivre",
     },
     "en": {
-        "Sujet": "## Meeting Topic",
-        "Hashtags": "## #Hashtags",
-        "Principaux enseignements": "## Main Takeaways",
-        "Questions / Réponses": "## Questions / Answers",
-        "Décisions": "## Decisions",
-        "Actions à suivre": "## Action Items",
+        "topic": "Topic",
+        "hashtags": "Hashtags",
+        "takeaways": "Main takeaways",
+        "qa": "Questions / Answers",
+        "decisions": "Decisions",
+        "actions": "Action items",
+    },
+}
+
+# Language-specific `##` headers written into the final markdown.
+RAG_SECTION_HEADERS: dict[str, dict[str, str]] = {
+    "fr": {
+        "topic": "## Sujet de la réunion",
+        "hashtags": "## #Hashtags",
+        "takeaways": "## Principaux enseignements",
+        "qa": "## Questions / Réponses",
+        "decisions": "## Décisions",
+        "actions": "## Actions à suivre",
+    },
+    "en": {
+        "topic": "## Meeting Topic",
+        "hashtags": "## #Hashtags",
+        "takeaways": "## Main Takeaways",
+        "qa": "## Questions / Answers",
+        "decisions": "## Decisions",
+        "actions": "## Action Items",
     },
 }
 

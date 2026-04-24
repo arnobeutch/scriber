@@ -1,8 +1,9 @@
 """Tests for markdown_writer.
 
-Note: ``extract_sections`` keys are always the French labels from
-``RAG_SECTION_TITLES`` regardless of the ``language`` arg — the RAG prompts
-currently emit those French labels for both languages.
+``extract_sections`` returns neutral keys (``topic`` / ``hashtags`` / ...).
+The regex matches the language-specific labels the prompt asks the model
+to emit (``Sujet`` in FR, ``Topic`` in EN), so parsing an FR sample with
+``language="en"`` yields no matches and vice versa.
 """
 
 from scriber.summarizers.markdown import (
@@ -21,28 +22,50 @@ Décisions: Lancement en juillet.
 Actions à suivre: Alice écrit la spec.
 """
 
+EN_SAMPLE = """
+Topic: Product launch
+Hashtags: #product #client
+Main takeaways: Going well.
+Questions / Answers: None.
+Decisions: Launch in July.
+Action items: Alice writes the spec.
+"""
+
 
 class TestExtractSections:
-    def test_extracts_all_sections(self) -> None:
+    def test_extracts_all_sections_fr(self) -> None:
         result = extract_sections(FR_SAMPLE, "fr")
-        assert "Lancement produit" in result["Sujet"]
-        assert "#produit" in result["Hashtags"]
-        assert "avance bien" in result["Principaux enseignements"]
-        assert "Rien" in result["Questions / Réponses"]
-        assert "Lancement en juillet" in result["Décisions"]
-        assert "Alice écrit" in result["Actions à suivre"]
+        assert "Lancement produit" in result["topic"]
+        assert "#produit" in result["hashtags"]
+        assert "avance bien" in result["takeaways"]
+        assert "Rien" in result["qa"]
+        assert "Lancement en juillet" in result["decisions"]
+        assert "Alice écrit" in result["actions"]
 
-    def test_language_does_not_affect_matched_keys(self) -> None:
-        en = extract_sections(FR_SAMPLE, "en")
-        fr = extract_sections(FR_SAMPLE, "fr")
-        assert set(en.keys()) == set(fr.keys())
+    def test_extracts_all_sections_en(self) -> None:
+        result = extract_sections(EN_SAMPLE, "en")
+        assert "Product launch" in result["topic"]
+        assert "#product" in result["hashtags"]
+        assert "Going well" in result["takeaways"]
+        assert "Launch in July" in result["decisions"]
+        assert "Alice writes" in result["actions"]
+
+    def test_language_mismatch_yields_only_shared_labels(self) -> None:
+        # Only ``Hashtags`` is spelled identically in FR and EN, so it's the
+        # sole key that survives a language mismatch. The others don't match.
+        fr_as_en = extract_sections(FR_SAMPLE, "en")
+        en_as_fr = extract_sections(EN_SAMPLE, "fr")
+        assert set(fr_as_en.keys()) <= {"hashtags"}
+        assert set(en_as_fr.keys()) <= {"hashtags"}
+        assert "topic" not in fr_as_en
+        assert "decisions" not in en_as_fr
 
     def test_missing_section_absent_from_dict(self) -> None:
         partial = "Sujet: Seul sujet ici.\nHashtags: #x\n"
         result = extract_sections(partial, "fr")
-        assert "Seul sujet" in result.get("Sujet", "")
-        assert "#x" in result.get("Hashtags", "")
-        assert "Décisions" not in result
+        assert "Seul sujet" in result.get("topic", "")
+        assert "#x" in result.get("hashtags", "")
+        assert "decisions" not in result
 
     def test_empty_summary(self) -> None:
         assert extract_sections("", "fr") == {}
@@ -75,10 +98,10 @@ class TestCleanSection:
 
 class TestFormatSummaryMarkdown:
     def test_english_output(self) -> None:
-        out = format_summary_markdown(FR_SAMPLE, "video-1", "en")
+        out = format_summary_markdown(EN_SAMPLE, "video-1", "en")
         assert out.startswith("# Meeting Summary — video-1")
         assert "## Meeting Topic" in out
-        assert "Lancement produit" in out
+        assert "Product launch" in out
         assert "## Decisions" in out
         assert "## Action Items" in out
 
