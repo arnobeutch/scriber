@@ -23,7 +23,7 @@ class RagSummarizer:
 
     Always uses Ollama; the model id comes from ``settings.llm_model`` if
     set, otherwise ``settings.ollama_model``. Writes a structured-section
-    markdown file (topic / hashtags / ...) plus a sentiment line.
+    markdown file (via ``format_summary_markdown``).
     """
 
     def __init__(self, settings: Settings) -> None:
@@ -35,8 +35,6 @@ class RagSummarizer:
 
     def summarize(self, transcript: Transcript, *, input_path: str) -> Path:
         """Generate a markdown summary on disk for the given transcript."""
-        _ = input_path  # not used by RAG (matches Summarizer Protocol)
-
         mode = resolve_mode(cast(SummaryMode, self.settings.summary_mode), transcript)
         prompt = get_prompt(mode, transcript.language)
         my_logger.info(f"Summary mode: {mode}")
@@ -63,10 +61,10 @@ class RagSummarizer:
             raw_summary,
             filename_stem=transcript.title,
             language=transcript.language,
+            mode=mode,
+            source_path=input_path,
+            sentiment=sentiment,
         )
-        # Append the sentiment as a last section so RAG output matches OpenAI's
-        # "sentiment-everywhere" expectation.
-        formatted += f"\n\n## Sentiment\n{sentiment}\n"
 
         suffix = "résumé" if transcript.language == "fr" else "summary"
         out_path = self.settings.output_dir / f"{transcript.title} - {suffix}.md"

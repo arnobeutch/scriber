@@ -103,13 +103,28 @@ class TestOpenAISummarizer:
     def test_writes_summary_file(self, tmp_path: Path) -> None:
         s = _settings(output_dir=tmp_path / "out")
         summarizer = OpenAISummarizer(s)
+        # Structured source-mode content so sections survive the formatter.
+        structured = (
+            "TL;DR: the body of the summary\n"
+            "Key takeaways:\n- a\n"
+            "Facts:\n- b\n"
+            "Opinions:\n- c\n"
+            "Speculation / unverified:\n- d\n"
+            "Counterpoints / alternatives:\n- e\n"
+            "Information quality / reliability: overall decent\n"
+        )
         with patch(
-            "scriber.summarizers.openai_compatible.OpenAI", return_value=self._mock_client()
+            "scriber.summarizers.openai_compatible.OpenAI",
+            return_value=self._mock_client(content=structured),
         ):
             summarizer.summarize(_transcript(language="en", title="vid"), input_path="u")
-        out = tmp_path / "out" / "vid.md"
+        out = tmp_path / "out" / "vid - summary.md"
         assert out.exists()
-        assert "summary body" in out.read_text()
+        text = out.read_text()
+        assert "# Summary — vid" in text
+        assert "## TL;DR" in text
+        assert "the body of the summary" in text
+        assert "## Sentiment" in text
 
     def test_french_uses_french_prompt(self, tmp_path: Path) -> None:
         s = _settings(output_dir=tmp_path / "out", summary_mode="source")
@@ -119,7 +134,7 @@ class TestOpenAISummarizer:
             summarizer.summarize(_transcript(language="fr", title="vidfr"), input_path="u")
         _, kwargs = client.chat.completions.create.call_args
         prompt = kwargs["messages"][1]["content"]
-        # SOURCE_PROMPT_FR uses "TL;DR :" header.
+        # FR source prompt uses "TL;DR :" header.
         assert "TL;DR :" in prompt
 
     def test_meeting_mode_uses_meeting_prompt(self, tmp_path: Path) -> None:
@@ -130,7 +145,7 @@ class TestOpenAISummarizer:
             summarizer.summarize(_transcript(language="en"), input_path="u")
         _, kwargs = client.chat.completions.create.call_args
         prompt = kwargs["messages"][1]["content"]
-        # MEETING_PROMPT_EN uses "Topic:" header.
+        # EN meeting prompt uses "Topic:" header.
         assert "Topic:" in prompt
 
     def test_unsupported_language_raises(self, tmp_path: Path) -> None:
@@ -149,7 +164,7 @@ class TestOpenAISummarizer:
         client.chat.completions.create.side_effect = openai.OpenAIError("boom")
         with patch("scriber.summarizers.openai_compatible.OpenAI", return_value=client):
             summarizer.summarize(_transcript(), input_path="u")
-        assert not (tmp_path / "out" / "vid.md").exists()
+        assert not list((tmp_path / "out").glob("*.md")) if (tmp_path / "out").exists() else True
 
     def test_empty_content_does_not_write(self, tmp_path: Path) -> None:
         s = _settings(output_dir=tmp_path / "out")
@@ -159,7 +174,7 @@ class TestOpenAISummarizer:
             return_value=self._mock_client(content=None),
         ):
             summarizer.summarize(_transcript(), input_path="u")
-        assert not (tmp_path / "out" / "vid.md").exists()
+        assert not list((tmp_path / "out").glob("*.md")) if (tmp_path / "out").exists() else True
 
     def test_uses_settings_openai_model(self, tmp_path: Path) -> None:
         s = _settings(output_dir=tmp_path / "out", openai_model="gpt-5")
@@ -234,7 +249,7 @@ class TestOpenRouterSummarizer:
 
 class TestRagSummarizer:
     def test_writes_structured_markdown_with_sentiment(self, tmp_path: Path) -> None:
-        s = _settings(output_dir=tmp_path / "out", llm_provider="ollama")
+        s = _settings(output_dir=tmp_path / "out", llm_provider="ollama", summary_mode="meeting")
         with patch(
             "scriber.summarizers.rag.generate_summary",
             return_value="Sujet: test\nHashtags: #t\n",

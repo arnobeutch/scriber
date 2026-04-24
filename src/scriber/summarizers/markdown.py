@@ -1,24 +1,27 @@
-"""Markdown formatter for Obsidian-compatible meeting summaries."""
+"""Markdown formatter for Obsidian-compatible summaries (meeting & source modes)."""
+
+from __future__ import annotations
 
 import re
+from typing import TYPE_CHECKING
 
-from scriber.constants import RAG_SECTION_HEADERS, RAG_SECTION_KEYS, RAG_SECTION_LABELS
+from scriber.constants import SECTION_HEADERS, SECTION_KEYS, SECTION_LABELS
 from scriber.logger import my_logger
 
+if TYPE_CHECKING:
+    from scriber.constants import ResolvedMode
 
-def extract_sections(summary: str, language: str) -> dict[str, str]:
-    """Return mapping of neutral section key -> content from raw text.
 
-    The regex matches the language-specific labels the prompt asks the
-    model to emit (``Sujet`` / ``Topic``…); the returned dict is keyed by
-    the neutral identifiers in ``RAG_SECTION_KEYS``.
+def extract_sections(summary: str, mode: ResolvedMode, language: str) -> dict[str, str]:
+    """Return mapping of neutral section key → content from raw model text.
+
+    Labels are mode- and language-specific (e.g. ``Sujet`` / ``Topic`` /
+    ``TL;DR``). Returned keys are the neutral identifiers from
+    ``SECTION_KEYS[mode]``.
     """
-    labels = RAG_SECTION_LABELS[language]
+    labels = SECTION_LABELS[mode][language]
     label_to_key = {label: key for key, label in labels.items()}
     joined_labels = "|".join(re.escape(label) for label in labels.values())
-    # Bound each section at the next known label or end-of-string. Using the
-    # label alternation in the lookahead (instead of `\n\S+?:`) correctly
-    # handles multi-word labels like "Principaux enseignements".
     pattern = rf"({joined_labels})\s*:\s*(.*?)(?=\n(?:{joined_labels})\s*:|\Z)"
 
     matches = re.findall(pattern, summary, flags=re.DOTALL)
@@ -26,16 +29,7 @@ def extract_sections(summary: str, language: str) -> dict[str, str]:
 
 
 def clean_section(text: str, language: str) -> str:
-    """Return cleaned section content, or default if empty.
-
-    Args:
-        text (str): Section body.
-        language (str): 'fr' or 'en'
-
-    Returns:
-        str: Cleaned section body or default filler.
-
-    """
+    """Return cleaned section content, or a localized default when empty."""
     cleaned = text.strip()
     default = "Aucune" if language == "fr" else "None"
     if not cleaned or cleaned.lower() in {"none", "aucune", "n/a"}:
@@ -43,63 +37,63 @@ def clean_section(text: str, language: str) -> str:
     return cleaned
 
 
-def format_summary_markdown(raw_summary: str, filename_stem: str, language: str) -> str:
-    """Return Obsidian-ready markdown summary from raw model output.
+_TITLE_PREFIXES: dict[ResolvedMode, dict[str, str]] = {
+    "meeting": {
+        "en": "# Meeting Summary",
+        "fr": "# Résumé de la réunion",
+    },
+    "source": {
+        "en": "# Summary",
+        "fr": "# Résumé",
+    },
+}
 
-    Args:
-        raw_summary (str): Summary output from the RAG engine.
-        filename_stem (str): Name (stem only) of the input file to use as title.
-        language (str): 'fr' or 'en'
+_SENTIMENT_HEADER: dict[str, str] = {"en": "## Sentiment", "fr": "## Sentiment"}
+_SOURCE_LABEL: dict[str, str] = {"en": "Source", "fr": "Source"}
 
-    Returns:
-        str: Complete markdown string.
 
+def format_summary_markdown(
+    raw_summary: str,
+    filename_stem: str,
+    language: str,
+    mode: ResolvedMode,
+    *,
+    source_path: str | None = None,
+    sentiment: str | None = None,
+) -> str:
+    """Return an Obsidian-ready structured-sections markdown for the summary.
+
+    Structure:
+        # <mode title> — <filename_stem>
+        > Source: <source_path>  (omitted when source_path is None/empty)
+
+        ## <Section 1 header>
+        <content or localized default>
+
+        ...
+
+        ## Sentiment
+        <sentiment>  (omitted when sentiment is None)
     """
     my_logger.debug("Formatting summary markdown...")
-    headers = RAG_SECTION_HEADERS[language]
-    sections = extract_sections(raw_summary, language)
+    headers = SECTION_HEADERS[mode][language]
+    sections = extract_sections(raw_summary, mode, language)
 
-    title_line = (
-        f"# Résumé de la réunion — {filename_stem}"
-        if language == "fr"
-        else f"# Meeting Summary — {filename_stem}"
-    )
+    title_line = f"{_TITLE_PREFIXES[mode][language]} — {filename_stem}"
 
     lines: list[str] = [title_line, ""]
-    for key in RAG_SECTION_KEYS:
+    if source_path:
+        lines.append(f"> {_SOURCE_LABEL[language]}: {source_path}")
+        lines.append("")
+
+    for key in SECTION_KEYS[mode]:
         lines.append(headers[key])
         lines.append(clean_section(sections.get(key, ""), language))
         lines.append("")
 
+    if sentiment:
+        lines.append(_SENTIMENT_HEADER[language])
+        lines.append(sentiment)
+        lines.append("")
+
     return "\n".join(lines)
-
-
-def simple_format_markdown(
-    video_title: str,
-    video_path: str,
-    summary: str,
-    sentiment: str,
-    language: str,
-) -> str:
-    """Format the final output in Markdown."""
-    if language == "en":
-        return f"""
-## 📺 Video Summary
-- Title: {video_title}
-- From: {video_path}
-- **Sentiment:** {sentiment}
-### 🎯 Theme & Summary
-{summary}
-
-"""
-    if language == "fr":
-        return f"""
-## 📺 Résumé de la vidéo
-- Titre : {video_title}
-- De : {video_path}
-- **Sentiment :** {sentiment}
-### 🎯 Thème & Résumé
-{summary}
-
-"""
-    return "Error: summarizer language not supported."

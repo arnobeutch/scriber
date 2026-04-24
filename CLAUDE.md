@@ -30,7 +30,7 @@ CLI tool to transcribe and summarize YouTube videos, local audio/video files, or
 | `src/scriber/parser.py` | argparse with `transcribe` / `summarize` subparsers. Shared flags live on both; `--with-openai` / `--llm-provider` / `--llm-model` / `--summary-mode` are summarize-only. `classify_input(path)` helper returns `{is_url, is_file, is_media_file, is_text_file}` per path (called by `main.py` per-input and eagerly in `parse_args()` for validation). |
 | `src/scriber/logger.py` | Custom logging: `ColorFormatter`, `MyJSONFormatter`, `NonErrorFilter`, `install_excepthook`. |
 | `src/scriber/logger_config.yaml` | dictConfig YAML. Handlers: stdout (non-errors), stderr (WARNING+), rotating `logs/scriber.log`. |
-| `src/scriber/constants.py` | Prompts (`OPENAI_PROMPT_EN/FR`, `RAG_FRENCH/ENGLISH_PROMPT`) + `RAG_SECTION_KEYS` / `RAG_SECTION_LABELS` / `RAG_SECTION_HEADERS` + polarity thresholds. |
+| `src/scriber/constants.py` | Section schemas per mode (`MEETING_SECTION_KEYS/LABELS/HEADERS`, `SOURCE_SECTION_*`, combined lookups `SECTION_KEYS/LABELS/HEADERS`) + polarity thresholds. Prompts moved into `summarizers/modes.py`. |
 | `src/scriber/settings.py` | Frozen `Settings` dataclass + stdlib `.env` loader (replaces the old `python-dotenv` dep). |
 | `src/scriber/transcription/youtube_captions.py` | yt-dlp-backed YouTube caption fetch. Picks manual > auto across `["fr", "en"]`. Raises `TranscriptUnavailableError` on failure. |
 | `src/scriber/transcription/youtube_audio.py` | yt-dlp-based audio download + video-id extraction + title metadata (used for the captionless-video fallback path). Smart-caches: returns existing `.wav` unless `force=True`. |

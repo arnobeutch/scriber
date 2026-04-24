@@ -8,7 +8,7 @@ import openai
 from openai import OpenAI
 
 from scriber.logger import my_logger
-from scriber.summarizers.markdown import simple_format_markdown
+from scriber.summarizers.markdown import format_summary_markdown
 
 from .base import analyze_sentiment
 from .modes import get_prompt, resolve_mode
@@ -79,14 +79,16 @@ class OpenAICompatibleSummarizer:
             my_logger.error("LLM returned empty content")
             return
 
-        markdown_output = simple_format_markdown(
-            transcript.title,
-            input_path,
+        markdown_output = format_summary_markdown(
             content,
-            sentiment,
-            transcript.language,
+            filename_stem=transcript.title,
+            language=transcript.language,
+            mode=mode,
+            source_path=input_path,
+            sentiment=sentiment,
         )
-        out_path = self.settings.output_dir / f"{transcript.title}.md"
+        suffix = "résumé" if transcript.language == "fr" else "summary"
+        out_path = self.settings.output_dir / f"{transcript.title} - {suffix}.md"
         out_path.parent.mkdir(parents=True, exist_ok=True)
         out_path.write_text(markdown_output, encoding="utf8")
         my_logger.info(f"Summary written to {out_path}")
