@@ -3,14 +3,55 @@
 from pathlib import Path
 
 from langchain.chains import RetrievalQA
-from langchain.text_splitter import RecursiveCharacterTextSplitter
 from langchain_chroma import Chroma
+from langchain_core.documents import Document
 from langchain_ollama import ChatOllama, OllamaEmbeddings
 
 from scriber import constants as my_constants
 from scriber.logger import my_logger
 
 CHROMA_PERSIST_DIR = Path("chroma_db")
+_CHUNK_SIZE = 500
+_CHUNK_OVERLAP = 50
+
+
+def pack_utterances(
+    utterances: list[tuple[str, str]],
+    chunk_size: int = _CHUNK_SIZE,
+    overlap: int = _CHUNK_OVERLAP,
+) -> list[str]:
+    """Greedily pack speaker-tagged utterances into ~chunk_size-char chunks.
+
+    Each utterance stays intact (no mid-sentence splits). A tail of the
+    previous chunk (~``overlap`` chars, rounded up to whole utterances) is
+    prepended to the next chunk for retrieval continuity. If a single
+    utterance exceeds ``chunk_size``, it becomes its own chunk.
+    """
+    lines = [f"{speaker} : {text}" for speaker, text in utterances]
+    chunks: list[str] = []
+    current: list[str] = []
+    current_len = 0
+
+    for line in lines:
+        line_len = len(line) + 1  # +1 for the joining newline
+        if current and current_len + line_len > chunk_size:
+            chunks.append("\n".join(current))
+            tail: list[str] = []
+            tail_len = 0
+            for prev in reversed(current):
+                if tail_len >= overlap:
+                    break
+                tail.insert(0, prev)
+                tail_len += len(prev) + 1
+            current = tail
+            current_len = tail_len
+        current.append(line)
+        current_len += line_len
+
+    if current:
+        chunks.append("\n".join(current))
+
+    return chunks
 
 
 def build_vectorstore_from_utterances(
@@ -27,10 +68,7 @@ def build_vectorstore_from_utterances(
         Chroma: Persistent vector store.
 
     """
-    text_chunks = [f"{speaker} : {text}" for speaker, text in utterances]
-
-    splitter = RecursiveCharacterTextSplitter(chunk_size=500, chunk_overlap=50)
-    documents = splitter.create_documents(text_chunks)  # pyright: ignore[reportUnknownMemberType]  # langchain metadatas param typed as dict[Unknown, Unknown]
+    documents = [Document(page_content=chunk) for chunk in pack_utterances(utterances)]
 
     embeddings = OllamaEmbeddings(model=model)
 
