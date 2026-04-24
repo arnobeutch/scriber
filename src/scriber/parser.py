@@ -127,6 +127,17 @@ def _add_shared_args(sub: argparse.ArgumentParser) -> None:
         ),
     )
     sub.add_argument(
+        "--continue-on-error",
+        dest="continue_on_error",
+        action="store_true",
+        default=False,
+        help=(
+            "Don't abort the batch when one input fails (e.g. yt-dlp "
+            "rate-limit, geo-block, age-gate). Failures are logged and "
+            "shown in the post-run summary."
+        ),
+    )
+    sub.add_argument(
         "-d",
         "--debug",
         action="store_true",

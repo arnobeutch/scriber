@@ -11,12 +11,12 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 from unittest.mock import MagicMock, patch
 
+import pytest
+
 from scriber.main import main
 
 if TYPE_CHECKING:
     from pathlib import Path
-
-    import pytest
 
 _URL = "https://y.com/watch?v=x"
 _URL_CLASSIFICATION = {
@@ -56,6 +56,8 @@ def _make_args(**overrides: object) -> MagicMock:
         "force": False,
         "subtitles": False,
         "dry_run": False,
+        "continue_on_error": False,
+        "context_file": None,
     }
     defaults.update(overrides)
     return MagicMock(**defaults)
@@ -218,3 +220,53 @@ class TestDispatcher:
             parse.return_value = _make_args(input_path=[_URL, url2])
             main()
         assert h_url.call_count == 2
+
+    def test_failure_aborts_batch_by_default(
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        monkeypatch.chdir(tmp_path)
+        url2 = "https://y.com/watch?v=y"
+        with (
+            patch("scriber.main.parser.parse_args") as parse,
+            patch("scriber.main.initialize_logger"),
+            patch("scriber.main.parser.classify_input", return_value=_URL_CLASSIFICATION),
+            patch(
+                "scriber.main.handlers.handle_url",
+                side_effect=[RuntimeError("first failed"), _make_transcript()],
+            ) as h_url,
+            patch("scriber.main.handlers.write_transcript_file"),
+        ):
+            parse.return_value = _make_args(input_path=[_URL, url2])
+            with pytest.raises(RuntimeError, match="first failed"):
+                main()
+        # Second input never attempted — default behavior.
+        assert h_url.call_count == 1
+
+    def test_continue_on_error_processes_remaining_and_exits_nonzero(
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        monkeypatch.chdir(tmp_path)
+        url2 = "https://y.com/watch?v=y"
+        with (
+            patch("scriber.main.parser.parse_args") as parse,
+            patch("scriber.main.initialize_logger"),
+            patch("scriber.main.parser.classify_input", return_value=_URL_CLASSIFICATION),
+            patch(
+                "scriber.main.handlers.handle_url",
+                side_effect=[RuntimeError("geo-blocked"), _make_transcript()],
+            ) as h_url,
+            patch("scriber.main.handlers.write_transcript_file"),
+        ):
+            parse.return_value = _make_args(
+                input_path=[_URL, url2],
+                continue_on_error=True,
+            )
+            with pytest.raises(SystemExit) as excinfo:
+                main()
+        # Both inputs attempted; non-zero exit because one failed.
+        assert h_url.call_count == 2
+        assert excinfo.value.code == 1

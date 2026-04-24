@@ -6,6 +6,7 @@ import argparse
 import dataclasses
 import shutil
 import sys
+from dataclasses import dataclass
 
 import torch.cuda
 
@@ -13,6 +14,15 @@ from scriber import handlers, parser
 from scriber.logger import initialize_logger, my_logger
 from scriber.settings import Settings
 from scriber.summarizers import MissingAPIKeyError, make_summarizer
+
+
+@dataclass(frozen=True)
+class _InputResult:
+    """One row of the post-run summary table."""
+
+    path: str
+    status: str  # "ok" or "error"
+    detail: str  # output path on success, error message on failure
 
 
 def _apply_cli_overrides(args: argparse.Namespace, base: Settings) -> Settings:
@@ -60,6 +70,56 @@ def _dry_run_report(path: str, classification: dict[str, bool], settings: Settin
     )
 
 
+def _process_one(
+    path: str,
+    args: argparse.Namespace,
+    settings: Settings,
+    *,
+    will_summarize: bool,
+) -> _InputResult:
+    """Transcribe (+ optionally summarize) one input; return a summary row."""
+    classification = parser.classify_input(path)
+    per_args = argparse.Namespace(**vars(args))
+    per_args.input_path = path
+    for key, val in classification.items():
+        setattr(per_args, key, val)
+
+    if per_args.is_url:
+        transcript = handlers.handle_url(per_args, settings)
+    elif per_args.is_media_file:
+        transcript = handlers.handle_media(per_args, settings)
+    elif per_args.is_text_file:
+        transcript = handlers.handle_text(per_args, settings)
+    else:
+        err_msg = f"No handler for the given input type: {path}"
+        raise RuntimeError(err_msg)
+
+    transcript_path = handlers.write_transcript_file(
+        transcript,
+        settings,
+        subtitles=args.subtitles,
+    )
+    my_logger.info(f"Video title: {transcript.title}")
+
+    if will_summarize:
+        my_logger.info("Generating summary...")
+        handlers.summarize(transcript, per_args, settings)
+
+    return _InputResult(path=path, status="ok", detail=str(transcript_path))
+
+
+def _print_batch_summary(results: list[_InputResult]) -> None:
+    """Print a ✓/✗ table after a multi-input run."""
+    if len(results) <= 1:
+        return
+    ok = sum(1 for r in results if r.status == "ok")
+    bad = len(results) - ok
+    my_logger.info(f"Batch summary: {ok} ok, {bad} failed")
+    for r in results:
+        mark = "✓" if r.status == "ok" else "✗"
+        my_logger.info(f"  {mark} {r.path}  —  {r.detail}")
+
+
 def main() -> None:
     """Parse args, build a Transcript for each input, write it, and optionally summarize."""
     args = parser.parse_args()
@@ -82,36 +142,28 @@ def main() -> None:
             my_logger.error(str(exc))
             sys.exit(2)
 
+    results: list[_InputResult] = []
     for path in args.input_path:
-        classification = parser.classify_input(path)
-
         if args.dry_run:
+            classification = parser.classify_input(path)
             _dry_run_report(path, classification, settings)
             continue
 
-        # Build a per-path namespace so handlers receive a single `input_path`
-        # string along with the correct type flags.
-        per_args = argparse.Namespace(**vars(args))
-        per_args.input_path = path
-        for key, val in classification.items():
-            setattr(per_args, key, val)
+        try:
+            results.append(
+                _process_one(path, args, settings, will_summarize=will_summarize),
+            )
+        except Exception as exc:
+            if not getattr(args, "continue_on_error", False):
+                raise
+            # Top-level batch boundary — capture anything so one bad input
+            # doesn't kill the rest of the run.
+            my_logger.error(f"Failed on {path!r}: {exc}")
+            results.append(_InputResult(path=path, status="error", detail=str(exc)))
 
-        if per_args.is_url:
-            transcript = handlers.handle_url(per_args, settings)
-        elif per_args.is_media_file:
-            transcript = handlers.handle_media(per_args, settings)
-        elif per_args.is_text_file:
-            transcript = handlers.handle_text(per_args, settings)
-        else:
-            my_logger.error(f"No handler for the given input type: {path}")
-            continue
-
-        handlers.write_transcript_file(transcript, settings, subtitles=args.subtitles)
-        my_logger.info(f"Video title: {transcript.title}")
-
-        if will_summarize:
-            my_logger.info("Generating summary...")
-            handlers.summarize(transcript, per_args, settings)
+    _print_batch_summary(results)
+    if any(r.status == "error" for r in results):
+        sys.exit(1)
 
 
 if __name__ == "__main__":
