@@ -30,7 +30,7 @@ that share the transcription half and diverge in the summarization half.
 
 ## 2. Architecture at a glance
 
-```
+```text
 CLI args ─▶ parser.parse_args ─▶ classify_input (per path)
                                       │
                                       ▼
@@ -61,24 +61,26 @@ Settings.from_env + CLI overrides ─▶ main._process_one
 
 The central in-memory hand-off is the `Transcript` dataclass. Every
 handler produces one; every backend consumes one. That's the system's
-waist.
+waist. `SourceMetadata` rides on the Transcript to carry provenance
+(channel, publication_date, detected_language, duration) into the
+summary's YAML frontmatter.
 
 ---
 
 ## 3. Module boundaries
 
 | Module | Role | Imports from |
-|---|---|---|
+| --- | --- | --- |
 | `main.py` | Top-level orchestration, batch loop, dry-run, GPU warning, preflight, exit code. | `parser`, `handlers`, `settings`, `summarizers`, `logger` |
 | `parser.py` | `argparse` layout; input classification (URL / media / text). | stdlib only |
 | `settings.py` | Frozen `Settings` dataclass, `.env` loader, `from_env()`. | stdlib only |
 | `handlers.py` | Per-input-type handlers (`handle_url`, `handle_media`, `handle_text`), transcript file writer, summarize dispatcher. | `transcription.*`, `summarizers`, `language`, `formatting`, `subtitles`, `model` |
-| `model.py` | Shared dataclasses (`Transcript`, `Chapter`). No business logic. | stdlib only |
+| `model.py` | Shared dataclasses (`Transcript`, `Chapter`, `SourceMetadata`). No business logic. | stdlib only |
 | `language.py` | Pure rules for summary-language selection. | none |
 | `formatting.py` | `sanitize_filename`, `wrap_transcript`. Text helpers. | stdlib only |
 | `subtitles.py` | `.srt` / `.vtt` writers from whisper segments. | stdlib only |
 | `logger.py` | dictConfig-driven logger with color + JSON handlers, excepthook install. | stdlib + `yaml` |
-| `constants.py` | Section schemas (`SECTION_KEYS/LABELS/HEADERS` per mode), polarity thresholds. | stdlib only |
+| `constants.py` | Section schemas per mode (`MEETING_SECTION_*`, `SOURCE_SECTION_*`, combined `SECTION_KEYS/LABELS/HEADERS`), `FRONTMATTER_ONLY_KEYS`, polarity thresholds. | stdlib only |
 | `transcription/youtube_captions.py` | `yt-dlp` caption fetch; `CaptionTrack`; `TranscriptUnavailableError`. | `yt-dlp` |
 | `transcription/youtube_audio.py` | `yt-dlp` audio download, video-id extraction, metadata (title + chapters). Smart-caches `.wav`. | `yt-dlp`, `model` |
 | `transcription/local.py` | `ffmpeg → whisper` pipeline, pyannote diarization, in-process whisper model cache. | `whisper`, `pyannote`, `torchaudio`, `ffmpeg`, `tqdm` |
@@ -115,6 +117,7 @@ class Transcript:
     diarized: bool
     segments: list[dict[str, Any]]         # whisper per-cue data for .srt/.vtt
     chapters: list[Chapter]                # yt-dlp chapters; empty for non-YT
+    metadata: SourceMetadata               # provenance for YAML frontmatter
 ```
 
 Rationale:
@@ -123,7 +126,10 @@ Rationale:
   and don't mutate. Summarizers and writers consume and never mutate.
 - **`language` means the summary language**, not the detected source
   language. The mapping is done by the language ladder (§8) in the
-  handler, so downstream code never has to redo it.
+  handler, so downstream code never has to redo it. The
+  *pre-ladder* source language lives on `metadata.detected_language`
+  instead, so the summary's frontmatter can tell "detected FR, summary
+  forced to EN" apart from "detected EN, summary EN".
 - **`segments` and `chapters` are optional payloads**. `segments` is
   whisper's per-cue list (empty for YT captions and diarized output,
   since neither surfaces per-cue data the writer can use). `chapters`
@@ -131,6 +137,10 @@ Rationale:
 - **`source` is the provenance tag**. It's what lets the auto-mode
   detector distinguish a diarized whisper transcript (likely a meeting)
   from a caption track (almost never a meeting).
+- **`metadata: SourceMetadata`** carries `channel`, `publication_date`
+  (ISO `YYYY-MM-DD`), `detected_language`, and `duration_seconds`.
+  Handlers populate what they can; unknown fields stay `None`. The
+  formatter reads this when building the YAML frontmatter (§7).
 
 The dataclass lives in its own module because both `handlers.py` and
 the summarizer package need it, and we don't want an import cycle.
@@ -212,6 +222,33 @@ ability to match different language labels without re-keying the whole
 pipeline, (c) freedom to pick prettier rendered headers than the model's
 raw labels (e.g. `## Meeting Topic` vs the model's plain `Topic:`).
 
+### Section keys per mode
+
+**meeting** (`MEETING_SECTION_KEYS`):
+`topic`, `hashtags`, `takeaways`, `qa`, `decisions`, `actions`.
+
+**source** (`SOURCE_SECTION_KEYS`):
+`summary`, `claims`, `quotes`, `factual`, `likely`, `interpretation`,
+`alternatives`, `wrong`, `applications`, `extensions`, `keywords`, `tags`.
+
+The four epistemic buckets — `factual`, `likely`, `interpretation`,
+`wrong` — are the substance of source-mode analysis. `alternatives` is
+rendered as `###` instead of `##` (see `SOURCE_SECTION_HEADERS`), so it
+reads as a sub-section of `interpretation` in the final markdown.
+
+### Frontmatter-only keys
+
+`FRONTMATTER_ONLY_KEYS = frozenset({"keywords", "tags"})`. Keys in this
+set are extracted from the model output exactly like any other section,
+but the render loop skips them — their values are routed into the YAML
+frontmatter instead of rendered as visible `##` sections. The LLM emits
+`Keywords: a, b, c` / `Tags: #x #y`; the formatter parses those into
+lists and passes them to `_build_frontmatter`.
+
+Add a key to `FRONTMATTER_ONLY_KEYS` when you want the model to produce
+structured metadata that belongs in the frontmatter rather than the
+body.
+
 ### Auto-detect
 
 `modes.detect_mode(transcript)` picks between `meeting` and `source`:
@@ -224,13 +261,14 @@ today (both dense and sparse opinion content lands in `source`).
 
 ### Adding a mode
 
-1. Add a key to `SECTION_KEYS`, `SECTION_LABELS`, `SECTION_HEADERS`.
-2. Add an entry in `SECTION_KEYS[mode]` keyed by the new mode name.
-3. Add a template + phrase dict in `summarizers/modes.py`; extend
+1. Add the mode's `{KEYS, LABELS, HEADERS}` tuples/dicts in
+   `constants.py` and register them in the combined `SECTION_KEYS`,
+   `SECTION_LABELS`, `SECTION_HEADERS` lookups.
+2. Add a template + phrase dict in `summarizers/modes.py`; extend
    `get_prompt` to dispatch.
-4. Extend `_TITLE_PREFIXES` in `summarizers/markdown.py`.
-5. If it should participate in `auto`, extend `detect_mode`.
-6. Extend `SummaryMode` / `ResolvedMode` Literals.
+3. Extend `_TITLE_PREFIXES` in `summarizers/markdown.py`.
+4. If it should participate in `auto`, extend `detect_mode`.
+5. Extend `SummaryMode` / `ResolvedMode` Literals.
 
 ---
 
@@ -239,7 +277,7 @@ today (both dense and sparse opinion content lands in `source`).
 ### Filenames (relative to `settings.output_dir`)
 
 | Kind | Pattern |
-|---|---|
+| --- | --- |
 | Non-diarized transcript | `{title} transcript.txt` |
 | Diarized transcript | `{title} diarized transcript.txt` |
 | Subtitles (whisper only) | `{title}.srt` / `{title}.vtt` |
@@ -247,12 +285,33 @@ today (both dense and sparse opinion content lands in `source`).
 | Summary (FR) | `{title} - résumé.md` |
 
 `{title}` is always the sanitized filename stem. Summary files ending in
-` - summary.md` / ` - résumé.md` are the convention both backends now
+`- summary.md` / `- résumé.md` are the convention both backends now
 follow; downstream tooling can pattern-match on the suffix.
 
 ### Markdown structure
 
-```
+```markdown
+---
+title: "{title}"
+source_url: "{input_path}" | null
+source_type: "youtube" | "media" | "text"
+transcript_source: "yt_manual" | "yt_auto" | "whisper" | "file"
+channel: "{channel}" | null
+publication_date: "YYYY-MM-DD" | null
+processing_date: "YYYY-MM-DD"
+detected_language: "en" | "fr" | ...
+summary_language: "en" | "fr"
+summary_mode: "meeting" | "source"
+duration_seconds: 123.4 | null
+chapters_count: 3
+diarized: true | false
+ingestion_status: "full"
+extraction_status: "ok"
+sentiment: "Positive" | "Neutral" | "Negative" | null
+keywords: ["a", "b"] | []
+tags: ["#x", "#y"] | []
+---
+
 # {Meeting Summary | Résumé de la réunion | Summary | Résumé} — {title}
 
 > Source: {input_path}              (omitted when missing)
@@ -273,10 +332,45 @@ follow; downstream tooling can pattern-match on the suffix.
 {Positive | Neutral | Negative}
 ```
 
+### Frontmatter schema
+
+Frontmatter keys are always English regardless of body language — it's
+a machine-readable schema, not content. `null` is used for unknown
+optional fields so Obsidian's dataview can reason about them uniformly.
+Sources for each field:
+
+| Field | Origin |
+| --- | --- |
+| `title` | `transcript.title` (sanitized) |
+| `source_url` | `input_path` argument to the summarizer; `null` for inline text |
+| `source_type` | `"youtube"` when `transcript.source` ∈ {`yt_manual`, `yt_auto`} or when `whisper` + URL source path; `"media"` for local whisper; `"text"` for file / inline |
+| `transcript_source` | `transcript.source` verbatim |
+| `channel` | `transcript.metadata.channel` (yt-dlp `channel` / `uploader`) |
+| `publication_date` | `transcript.metadata.publication_date` (yt-dlp `upload_date` normalized `YYYYMMDD` → `YYYY-MM-DD`) |
+| `processing_date` | `datetime.now(UTC).date()` at formatter call time |
+| `detected_language` | `transcript.metadata.detected_language` — **pre-ladder** source language (caption track lang, whisper `used_lang`, `langdetect` output) |
+| `summary_language` | `transcript.language` — post-ladder summary language |
+| `summary_mode` | Resolved mode (`meeting` / `source`) |
+| `duration_seconds` | `transcript.metadata.duration_seconds` (yt-dlp) |
+| `chapters_count` | `len(transcript.chapters)` |
+| `diarized` | `transcript.diarized` |
+| `ingestion_status` | Always `"full"` today — scriber always loads the full transcript |
+| `extraction_status` | Always `"ok"` today |
+| `sentiment` | `analyze_sentiment(transcript.text)` result |
+| `keywords`, `tags` | Parsed from model output (`FRONTMATTER_ONLY_KEYS`); caller can override |
+
+`ingestion_status` and `extraction_status` are stubbed at `"full"` /
+`"ok"` — the fields exist so dataview queries don't break when we
+eventually surface partial-load cases (truncated captions, paywalled
+articles, etc.).
+
+### Body
+
 Section headers come from `SECTION_HEADERS[mode][language]` and render in
-`SECTION_KEYS[mode]` order. Missing content is filled with `None` (EN) or
-`Aucune` (FR) rather than leaving an empty section — downstream readers
-can rely on every key being present when the schema says it should be.
+`SECTION_KEYS[mode]` order, skipping keys in `FRONTMATTER_ONLY_KEYS`.
+Missing content is filled with `None` (EN) or `Aucune` (FR) rather than
+leaving an empty section — downstream readers can rely on every visible
+key being present when the schema says it should be.
 
 ---
 
