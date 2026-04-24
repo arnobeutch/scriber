@@ -4,16 +4,7 @@ Planned improvements, grouped by priority. Items are unordered within each group
 
 ## Near-term
 
-- **Fix RAG chunking params.** `chunk_size=500, chunk_overlap=50` on diarized transcripts yields one-doc-per-utterance. Either bypass the splitter for already-segmented input, or merge utterances up to `chunk_size`. This is a correctness bug, not polish — retrieval degrades to keyword lookup on single turns.
-- **Unify OpenAI and RAG output format.** Both should emit structured sections for clean Obsidian integration. Today OpenAI writes one-block markdown while RAG writes sectioned.
-- **Unify EN/FR prompt templates.** Collapse the near-identical pairs into one template + a dict of language-varying phrases.
-- **Rename `RAG_SECTION_TITLES` keys** from French literals (`"Sujet"`, `"Principaux enseignements"`, …) to neutral (`topic`, `hashtags`, `takeaways`, `qa`, `decisions`, `actions`). Language becomes a presentation concern only.
-- **Chapter / TOC extraction** from yt-dlp's `chapters` field, with `?t=<ss>` deep-links.
-- **YouTube audio diarization.** Currently diarization only runs on local media; extend to YT audio (uses the downloaded `.wav` we already have).
-- **`--context-file path.txt`** for source-summary mode (appends extra material to the LLM prompt).
-- **Progress bar** during whisper transcription + download steps. Silent minutes are a UX problem.
-- **Streaming LLM output.** Long transcripts take minutes and the CLI is silent; `stream=True` on the OpenAI SDK should flush tokens as they arrive.
-- **Batch-mode resilience.** `--continue-on-error` so one yt-dlp rate-limit / geo-block / age-gate doesn't kill the whole run. Post-run summary table (✓/✗ per input).
+All near-term items cleared on 2026-04-24 — see the Completed log below.
 
 ## Medium-term
 
@@ -49,6 +40,16 @@ Planned improvements, grouped by priority. Items are unordered within each group
 
 ## Completed
 
+- 2026-04-24 — **Batch-mode resilience.** `--continue-on-error` flag + post-run ✓/✗ summary table; non-zero exit when any input failed so CI surfaces failures.
+- 2026-04-24 — **Streaming LLM output.** OpenAI/OpenRouter backend uses `stream=True`; tokens echo to stdout as they generate (long summaries no longer look frozen).
+- 2026-04-24 — **Progress bar** during whisper transcription (`verbose=False`) and yt-dlp audio download (native progress line re-enabled). Diarized path wraps the per-segment loop in tqdm.
+- 2026-04-24 — **`--context-file path.txt`** for the summarize subcommand. Contents are injected as an "Additional context" block right before the `Transcript:` marker. Wired through the Summarizer Protocol via a new `context: str | None` kwarg.
+- 2026-04-24 — **YouTube audio diarization.** `--diarize` on a YT URL now skips the caption fetch entirely and always runs whisper + pyannote on the downloaded audio — captions don't carry speaker attribution.
+- 2026-04-24 — **Chapter / TOC extraction** from yt-dlp's `chapters` field. `Transcript` carries a `chapters` list; the formatter renders a `## Chapters` section with `?t=<ss>` deep-links when the source is a URL, plain `MM:SS —` lines otherwise.
+- 2026-04-24 — **Unified structured-sections output for OpenAI and RAG.** Both backends write the same Obsidian-friendly markdown via `format_summary_markdown`; source mode got its own section schema (TL;DR / Key takeaways / Facts / Opinions / Speculation / Counterpoints / Reliability). `RAG_SECTION_*` renamed `MEETING_SECTION_*`; combined `SECTION_KEYS/LABELS/HEADERS` lookups. Dead `simple_format_markdown` removed.
+- 2026-04-24 — **Unified EN/FR prompt templates.** `MEETING_PROMPT_*` and `SOURCE_PROMPT_*` pairs collapsed into one template per mode + a per-language phrase dict. Dead `OPENAI_PROMPT_EN/FR` and `RAG_FRENCH/ENGLISH_PROMPT` removed.
+- 2026-04-24 — **Neutral keys for RAG section titles.** Split `RAG_SECTION_TITLES` into `RAG_SECTION_KEYS` (neutral identifiers) + `RAG_SECTION_LABELS` (per-language regex labels) + `RAG_SECTION_HEADERS` (per-language `##` headers). Side-effect: fixed a latent EN-RAG bug where French labels were matched regardless of language.
+- 2026-04-24 — **RAG chunking fix.** Replaced the `RecursiveCharacterTextSplitter(500/50)` that produced one-doc-per-utterance with a greedy utterance-packer: preserves speaker boundaries, overlaps whole-utterance tails.
 - 2026-04-24 — **CLI split into `scriber transcribe` / `scriber summarize` subcommands; project renamed `yt-summary` → `scriber`.** `--summarize` and `--transcript-only` flags removed.
 - 2026-04-24 — Sentiment added to RAG summaries (parity with OpenAI/OpenRouter backends).
 - 2026-04-22 — Unit test suite added (271 tests across all tiers; opt-in `integration` marker for whisper / pyannote).
