@@ -20,6 +20,8 @@ ResolvedMode = Literal["meeting", "source"]
 _MEETING_TEMPLATE = """\
 {intro}
 
+{boundary}
+
 {topic_label}{colon} {topic_hint}
 Hashtags{colon} {hashtags_hint}
 {takeaways_label}{colon}
@@ -34,6 +36,23 @@ Hashtags{colon} {hashtags_hint}
 {transcript_label}{colon}
 """
 
+_BOUNDARY_EN = (
+    "Ground every claim, quote, and attribution in the transcript below.\n"
+    "Do NOT supplement with facts, names, statistics, or assertions from your\n"
+    "training data. If adding background context genuinely aids comprehension\n"
+    '(e.g. defining a technical term), prefix it with "[Background]" so it is\n'
+    "visibly distinct from transcript-derived content."
+)
+
+_BOUNDARY_FR = (
+    "Ancrez chaque affirmation, citation et attribution dans la transcription\n"
+    "ci-dessous. N'ajoutez PAS de faits, noms, statistiques ou assertions issus\n"
+    "de vos données d'entraînement. Si un contexte d'arrière-plan aide vraiment\n"
+    "la compréhension (ex. définir un terme technique), préfixez-le par\n"
+    '"[Contexte]" pour le distinguer visiblement du contenu tiré de la transcription.'
+)
+
+
 _MEETING_PHRASES: dict[str, dict[str, str]] = {
     "en": {
         "intro": (
@@ -41,6 +60,7 @@ _MEETING_PHRASES: dict[str, dict[str, str]] = {
             "transcript below, produce a structured summary in English with these\n"
             "sections (use the exact headers, in this order):"
         ),
+        "boundary": _BOUNDARY_EN,
         "colon": ":",
         "topic_label": "Topic",
         "topic_hint": "<one-line meeting topic>",
@@ -62,6 +82,7 @@ _MEETING_PHRASES: dict[str, dict[str, str]] = {
             "français avec ces sections (utilisez exactement ces en-têtes, dans cet\n"
             "ordre) :"
         ),
+        "boundary": _BOUNDARY_FR,
         "colon": " :",
         "topic_label": "Sujet",
         "topic_hint": "<thème de la réunion en une ligne>",
@@ -80,6 +101,8 @@ _MEETING_PHRASES: dict[str, dict[str, str]] = {
 
 _SOURCE_TEMPLATE = """\
 {intro}
+
+{boundary}
 
 {summary_label}{colon} {summary_hint}
 {claims_label}{colon}
@@ -113,6 +136,7 @@ _SOURCE_PHRASES: dict[str, dict[str, str]] = {
             "unconfirmed / Interpretation or weakly substantiated / Wrong or\n"
             'misleading). If a bucket has nothing to report, write "None identified".'
         ),
+        "boundary": _BOUNDARY_EN,
         "colon": ":",
         "summary_label": "Summary",
         "summary_hint": "<1-2 sentence overview of what the source argues>",
@@ -147,6 +171,7 @@ _SOURCE_PHRASES: dict[str, dict[str, str]] = {
             "confirmé / Interprétation ou faiblement étayé / Faux ou trompeur).\n"
             "Si une catégorie n'a rien à signaler, écrivez « Aucun identifié »."
         ),
+        "boundary": _BOUNDARY_FR,
         "colon": " :",
         "summary_label": "Résumé",
         "summary_hint": "<aperçu en 1-2 phrases de la thèse de la source>",

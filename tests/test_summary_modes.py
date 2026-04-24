@@ -62,6 +62,19 @@ class TestGetPrompt:
         with pytest.raises(ValueError, match="language not supported"):
             get_prompt("meeting", "de")
 
+    def test_training_data_boundary_rendered_en(self) -> None:
+        for mode in ("meeting", "source"):
+            out = get_prompt(mode, "en")  # type: ignore[arg-type]
+            assert "Ground every claim" in out
+            assert "Do NOT supplement" in out
+            assert "[Background]" in out
+
+    def test_training_data_boundary_rendered_fr(self) -> None:
+        for mode in ("meeting", "source"):
+            out = get_prompt(mode, "fr")  # type: ignore[arg-type]
+            assert "Ancrez chaque affirmation" in out
+            assert "[Contexte]" in out
+
     def test_context_injects_before_transcript_marker_en(self) -> None:
         out = get_prompt("source", "en", context="GlossaryX means Y.")
         assert "Additional context:" in out
