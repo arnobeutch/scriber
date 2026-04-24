@@ -6,6 +6,7 @@ from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 from scriber.handlers import handle_url
+from scriber.model import SourceMetadata
 from scriber.settings import Settings
 from scriber.transcription.youtube_audio import download_youtube_audio
 from scriber.transcription.youtube_captions import TranscriptUnavailableError
@@ -49,14 +50,16 @@ class TestDownloadCache:
         out = tmp_path / "dl"
         out.mkdir()
         (out / "abc.wav").write_bytes(b"")
+        from scriber.model import SourceMetadata
+
         with (
             patch(
                 "scriber.transcription.youtube_audio.fetch_video_metadata",
-                return_value=("Cached Title", []),
+                return_value=("Cached Title", [], SourceMetadata()),
             ) as fetch,
             patch("scriber.transcription.youtube_audio.yt_dlp.YoutubeDL") as ydl,
         ):
-            audio_path, title, chapters = download_youtube_audio("https://youtu.be/abc", out)
+            audio_path, title, chapters, _ = download_youtube_audio("https://youtu.be/abc", out)
         assert audio_path == out / "abc.wav"
         assert title == "Cached Title"
         assert chapters == []
@@ -79,7 +82,7 @@ class TestDownloadCache:
 
         ctx.extract_info.side_effect = _extract_info
         with patch("scriber.transcription.youtube_audio.yt_dlp.YoutubeDL", return_value=ctx) as ydl:
-            audio_path, title, _ = download_youtube_audio(
+            audio_path, title, *_ = download_youtube_audio(
                 "https://youtu.be/abc",
                 out,
                 force=True,
@@ -103,7 +106,7 @@ class TestHandleUrlCachedTranscript:
             ),
             patch(
                 "scriber.handlers.pya.download_youtube_audio",
-                return_value=(s.downloads_dir / "abc.wav", "Vid", []),
+                return_value=(s.downloads_dir / "abc.wav", "Vid", [], SourceMetadata()),
             ),
             patch("scriber.handlers.plt.transcribe_audio_full") as transcribe,
         ):
@@ -123,7 +126,7 @@ class TestHandleUrlCachedTranscript:
             ),
             patch(
                 "scriber.handlers.pya.download_youtube_audio",
-                return_value=(s.downloads_dir / "abc.wav", "Vid", []),
+                return_value=(s.downloads_dir / "abc.wav", "Vid", [], SourceMetadata()),
             ),
             patch(
                 "scriber.handlers.plt.transcribe_audio_full",

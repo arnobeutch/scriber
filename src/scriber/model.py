@@ -21,6 +21,21 @@ class Chapter:
 
 
 @dataclass(frozen=True)
+class SourceMetadata:
+    """Provenance metadata rendered into the summary's YAML frontmatter.
+
+    Every field is optional — populated when the handler can determine it,
+    left as ``None`` otherwise. ``detected_language`` is the *source's*
+    language (pre-ladder), not the summary language.
+    """
+
+    channel: str | None = None
+    publication_date: str | None = None  # YYYY-MM-DD
+    detected_language: str | None = None
+    duration_seconds: float | None = None
+
+
+@dataclass(frozen=True)
 class Transcript:
     """In-memory representation of a transcript ready to be written / summarized."""
 
@@ -33,3 +48,5 @@ class Transcript:
     """Whisper-style per-cue segments for SRT/VTT export. Empty when N/A."""
     chapters: list[Chapter] = field(default_factory=list[Chapter])
     """YouTube chapters when the source URL exposes them; empty otherwise."""
+    metadata: SourceMetadata = field(default_factory=SourceMetadata)
+    """Provenance metadata (channel / publication_date / detected_language / duration)."""

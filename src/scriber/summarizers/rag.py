@@ -65,12 +65,10 @@ class RagSummarizer:
         my_logger.info("Formatting markdown...")
         formatted = format_summary_markdown(
             raw_summary,
-            filename_stem=transcript.title,
-            language=transcript.language,
-            mode=mode,
+            transcript,
+            mode,
             source_path=input_path,
             sentiment=sentiment,
-            chapters=transcript.chapters,
         )
 
         suffix = "résumé" if transcript.language == "fr" else "summary"

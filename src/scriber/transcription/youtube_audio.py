@@ -9,7 +9,7 @@ from typing import Any, cast
 import yt_dlp
 
 from scriber.logger import my_logger
-from scriber.model import Chapter
+from scriber.model import Chapter, SourceMetadata
 
 
 def extract_video_id(url: str) -> str:
@@ -48,8 +48,38 @@ def _parse_chapters(info: dict[str, Any]) -> list[Chapter]:
     return out
 
 
-def fetch_video_metadata(url: str) -> tuple[str, list[Chapter]]:
-    """Return ``(title, chapters)`` via yt-dlp metadata (no audio download)."""
+def _normalize_upload_date(raw: str | None) -> str | None:
+    """Convert yt-dlp's ``YYYYMMDD`` upload date to ISO ``YYYY-MM-DD``.
+
+    Returns ``None`` for empty or malformed values.
+    """
+    _expected_len = 8
+    if not raw:
+        return None
+    s = str(raw).strip()
+    if len(s) != _expected_len or not s.isdigit():
+        return None
+    return f"{s[0:4]}-{s[4:6]}-{s[6:8]}"
+
+
+def _parse_metadata(info: dict[str, Any]) -> SourceMetadata:
+    """Pull channel / upload_date / duration from yt-dlp info into ``SourceMetadata``."""
+    channel_raw = info.get("channel") or info.get("uploader")
+    duration_raw = info.get("duration")
+    duration: float | None
+    try:
+        duration = float(duration_raw) if duration_raw is not None else None
+    except (TypeError, ValueError):
+        duration = None
+    return SourceMetadata(
+        channel=str(channel_raw).strip() if channel_raw else None,
+        publication_date=_normalize_upload_date(info.get("upload_date")),
+        duration_seconds=duration,
+    )
+
+
+def fetch_video_metadata(url: str) -> tuple[str, list[Chapter], SourceMetadata]:
+    """Return ``(title, chapters, metadata)`` via yt-dlp metadata (no audio download)."""
     opts: Any = {
         "quiet": True,
         "no_warnings": True,
@@ -59,7 +89,7 @@ def fetch_video_metadata(url: str) -> tuple[str, list[Chapter]]:
     with yt_dlp.YoutubeDL(opts) as ydl:
         info = cast(dict[str, Any], ydl.extract_info(url, download=False))
     title = cast(str, info.get("title") or info.get("id") or "unknown")
-    return title, _parse_chapters(info)
+    return title, _parse_chapters(info), _parse_metadata(info)
 
 
 def fetch_video_title(url: str) -> str:
@@ -72,7 +102,7 @@ def download_youtube_audio(
     output_dir: Path,
     *,
     force: bool = False,
-) -> tuple[Path, str, list[Chapter]]:
+) -> tuple[Path, str, list[Chapter], SourceMetadata]:
     """Download the audio track of a YouTube video as a wav file.
 
     Args:
@@ -81,9 +111,10 @@ def download_youtube_audio(
         force: If True, re-download even if the .wav already exists.
 
     Returns:
-        ``(audio_path, video_title, chapters)`` — path to the downloaded wav,
-        the video's human-readable title (unsanitized), and its chapter list
-        (empty when the video has no chapters).
+        ``(audio_path, video_title, chapters, metadata)`` — path to the
+        downloaded wav, the video's unsanitized title, its chapter list
+        (empty when absent), and provenance metadata
+        (channel / publication_date / duration).
 
     """
     output_dir.mkdir(parents=True, exist_ok=True)
@@ -94,8 +125,8 @@ def download_youtube_audio(
         cached_wav = output_dir / f"{video_id}.wav"
         if cached_wav.exists():
             my_logger.info(f"Using cached audio at {cached_wav}")
-            title, chapters = fetch_video_metadata(url)
-            return cached_wav, title, chapters
+            title, chapters, metadata = fetch_video_metadata(url)
+            return cached_wav, title, chapters, metadata
 
     my_logger.info(f"Downloading audio from {url}")
 
@@ -120,8 +151,9 @@ def download_youtube_audio(
     video_id = cast(str, info["id"])
     title = cast(str, info.get("title") or video_id)
     chapters = _parse_chapters(info)
+    metadata = _parse_metadata(info)
     audio_path = output_dir / f"{video_id}.wav"
     if not audio_path.exists():
         err_msg = f"yt-dlp reported success but {audio_path} is missing"
         raise FileNotFoundError(err_msg)
-    return audio_path, title, chapters
+    return audio_path, title, chapters, metadata

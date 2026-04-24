@@ -74,7 +74,7 @@ class TestFetchVideoMetadata:
                 ],
             }
             dl_cls.return_value.__enter__.return_value = ctx
-            title, chapters = fetch_video_metadata("https://youtu.be/abc")
+            title, chapters, _ = fetch_video_metadata("https://youtu.be/abc")
         assert title == "t"
         assert len(chapters) == 2
         assert chapters[0].start_time == 0
@@ -86,8 +86,36 @@ class TestFetchVideoMetadata:
             ctx = MagicMock()
             ctx.extract_info.return_value = {"title": "t", "id": "abc"}
             dl_cls.return_value.__enter__.return_value = ctx
-            _, chapters = fetch_video_metadata("https://youtu.be/abc")
+            _, chapters, _ = fetch_video_metadata("https://youtu.be/abc")
         assert chapters == []
+
+    def test_parses_channel_upload_date_duration(self) -> None:
+        with patch("scriber.transcription.youtube_audio.yt_dlp.YoutubeDL") as dl_cls:
+            ctx = MagicMock()
+            ctx.extract_info.return_value = {
+                "title": "t",
+                "id": "abc",
+                "channel": "Some Channel",
+                "upload_date": "20260115",
+                "duration": 142.7,
+            }
+            dl_cls.return_value.__enter__.return_value = ctx
+            _, _, meta = fetch_video_metadata("https://youtu.be/abc")
+        assert meta.channel == "Some Channel"
+        assert meta.publication_date == "2026-01-15"
+        assert meta.duration_seconds == 142.7
+
+    def test_malformed_upload_date_becomes_none(self) -> None:
+        with patch("scriber.transcription.youtube_audio.yt_dlp.YoutubeDL") as dl_cls:
+            ctx = MagicMock()
+            ctx.extract_info.return_value = {
+                "title": "t",
+                "id": "abc",
+                "upload_date": "nope",
+            }
+            dl_cls.return_value.__enter__.return_value = ctx
+            _, _, meta = fetch_video_metadata("https://youtu.be/abc")
+        assert meta.publication_date is None
 
     def test_skips_malformed_entries(self) -> None:
         with patch("scriber.transcription.youtube_audio.yt_dlp.YoutubeDL") as dl_cls:
@@ -102,7 +130,7 @@ class TestFetchVideoMetadata:
                 ],
             }
             dl_cls.return_value.__enter__.return_value = ctx
-            _, chapters = fetch_video_metadata("https://youtu.be/abc")
+            _, chapters, _ = fetch_video_metadata("https://youtu.be/abc")
         assert len(chapters) == 1
         assert chapters[0].title == "OK"
 
@@ -126,7 +154,7 @@ class TestDownloadYoutubeAudio:
             ctx = MagicMock()
             ctx.extract_info.side_effect = fake_extract
             dl_cls.return_value.__enter__.return_value = ctx
-            audio_path, title, chapters = download_youtube_audio(
+            audio_path, title, chapters, metadata = download_youtube_audio(
                 "https://youtu.be/abc123",
                 out,
             )
@@ -135,6 +163,9 @@ class TestDownloadYoutubeAudio:
         assert title == "My Video"
         assert [c.title for c in chapters] == ["Intro"]
         assert audio_path.exists()
+        # Metadata fields unset when yt-dlp info is minimal.
+        assert metadata.channel is None
+        assert metadata.publication_date is None
 
     def test_missing_output_file_raises(self, tmp_path: Path) -> None:
         out = tmp_path / "downloads"

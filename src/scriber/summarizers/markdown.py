@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import datetime as dt
 import re
 from typing import TYPE_CHECKING
 from urllib.parse import parse_qs, urlencode, urlparse, urlunparse
@@ -13,7 +14,7 @@ if TYPE_CHECKING:
     from collections.abc import Sequence
 
     from scriber.constants import ResolvedMode
-    from scriber.model import Chapter
+    from scriber.model import Chapter, SourceMetadata, Transcript
 
 
 def extract_sections(summary: str, mode: ResolvedMode, language: str) -> dict[str, str]:
@@ -96,23 +97,93 @@ def _render_chapters_section(
     return lines
 
 
+def _yaml_scalar(value: str | float | bool | None) -> str:
+    """Render a scalar YAML value safely for our frontmatter use case."""
+    if value is None:
+        return "null"
+    if isinstance(value, bool):
+        return "true" if value else "false"
+    if isinstance(value, (int, float)):
+        return str(value)
+    # Quote strings so special chars don't break YAML. Escape embedded quotes.
+    return '"' + value.replace("\\", "\\\\").replace('"', '\\"') + '"'
+
+
+def _yaml_list(items: Sequence[str]) -> str:
+    """Render a list of strings as an inline YAML flow sequence."""
+    if not items:
+        return "[]"
+    return "[" + ", ".join(_yaml_scalar(item) for item in items) + "]"
+
+
+def _source_type(transcript: Transcript, source_path: str | None) -> str:
+    if transcript.source in {"yt_manual", "yt_auto"}:
+        return "youtube"
+    if transcript.source == "whisper":
+        parsed = urlparse(source_path or "") if source_path else None
+        if parsed and parsed.scheme in {"http", "https"}:
+            return "youtube"  # YT audio fallback path
+        return "media"
+    return "text"
+
+
+def _build_frontmatter(
+    transcript: Transcript,
+    *,
+    source_path: str | None,
+    sentiment: str | None,
+    processing_date: str,
+    mode: ResolvedMode,
+    keywords: Sequence[str],
+    tags: Sequence[str],
+) -> list[str]:
+    meta: SourceMetadata = transcript.metadata
+    fields: list[tuple[str, str]] = [
+        ("title", _yaml_scalar(transcript.title)),
+        ("source_url", _yaml_scalar(source_path)),
+        ("source_type", _yaml_scalar(_source_type(transcript, source_path))),
+        ("transcript_source", _yaml_scalar(transcript.source)),
+        ("channel", _yaml_scalar(meta.channel)),
+        ("publication_date", _yaml_scalar(meta.publication_date)),
+        ("processing_date", _yaml_scalar(processing_date)),
+        ("detected_language", _yaml_scalar(meta.detected_language)),
+        ("summary_language", _yaml_scalar(transcript.language)),
+        ("summary_mode", _yaml_scalar(mode)),
+        ("duration_seconds", _yaml_scalar(meta.duration_seconds)),
+        ("chapters_count", _yaml_scalar(len(transcript.chapters))),
+        ("diarized", _yaml_scalar(transcript.diarized)),
+        ("ingestion_status", _yaml_scalar("full")),
+        ("extraction_status", _yaml_scalar("ok")),
+        ("sentiment", _yaml_scalar(sentiment)),
+        ("keywords", _yaml_list(keywords)),
+        ("tags", _yaml_list(tags)),
+    ]
+    return ["---", *(f"{k}: {v}" for k, v in fields), "---", ""]
+
+
 def format_summary_markdown(
     raw_summary: str,
-    filename_stem: str,
-    language: str,
+    transcript: Transcript,
     mode: ResolvedMode,
     *,
     source_path: str | None = None,
     sentiment: str | None = None,
-    chapters: Sequence[Chapter] | None = None,
+    processing_date: str | None = None,
+    keywords: Sequence[str] | None = None,
+    tags: Sequence[str] | None = None,
 ) -> str:
     """Return an Obsidian-ready structured-sections markdown for the summary.
 
     Structure:
-        # <mode title> — <filename_stem>
+        ---
+        <YAML frontmatter: title, source_url, dates, language, sentiment, ...>
+        ---
+
+        # <mode title> — <transcript.title>
+
         > Source: <source_path>  (omitted when source_path is None/empty)
 
-        ## Chapters             (omitted when chapters is empty)
+        ## Chapters              (omitted when transcript.chapters = [])
         - [MM:SS](url?t=ss) ...
 
         ## <Section 1 header>
@@ -124,18 +195,28 @@ def format_summary_markdown(
         <sentiment>  (omitted when sentiment is None)
     """
     my_logger.debug("Formatting summary markdown...")
+    language = transcript.language
     headers = SECTION_HEADERS[mode][language]
     sections = extract_sections(raw_summary, mode, language)
 
-    title_line = f"{_TITLE_PREFIXES[mode][language]} — {filename_stem}"
+    lines = _build_frontmatter(
+        transcript,
+        source_path=source_path,
+        sentiment=sentiment,
+        processing_date=processing_date or dt.datetime.now(tz=dt.UTC).date().isoformat(),
+        mode=mode,
+        keywords=keywords or [],
+        tags=tags or [],
+    )
 
-    lines: list[str] = [title_line, ""]
+    title_line = f"{_TITLE_PREFIXES[mode][language]} — {transcript.title}"
+    lines.extend([title_line, ""])
     if source_path:
         lines.append(f"> {_SOURCE_LABEL[language]}: {source_path}")
         lines.append("")
 
-    if chapters:
-        lines.extend(_render_chapters_section(chapters, source_path, language))
+    if transcript.chapters:
+        lines.extend(_render_chapters_section(transcript.chapters, source_path, language))
 
     for key in SECTION_KEYS[mode]:
         lines.append(headers[key])

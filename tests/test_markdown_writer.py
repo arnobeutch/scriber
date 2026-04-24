@@ -6,11 +6,33 @@
 asks the model to emit.
 """
 
+from scriber.model import Chapter, SourceMetadata, Transcript
 from scriber.summarizers.markdown import (
     clean_section,
     extract_sections,
     format_summary_markdown,
 )
+
+
+def _transcript(
+    *,
+    title: str = "video-1",
+    language: str = "en",
+    chapters: list[Chapter] | None = None,
+    metadata: SourceMetadata | None = None,
+    diarized: bool = False,
+    source: str = "yt_manual",
+) -> Transcript:
+    return Transcript(
+        text="",
+        language=language,
+        title=title,
+        source=source,  # type: ignore[arg-type]
+        diarized=diarized,
+        chapters=chapters or [],
+        metadata=metadata or SourceMetadata(),
+    )
+
 
 FR_MEETING_SAMPLE = """
 Sujet: Lancement produit
@@ -122,59 +144,61 @@ class TestCleanSection:
 
 class TestFormatSummaryMarkdown:
     def test_meeting_en_output(self) -> None:
-        out = format_summary_markdown(EN_MEETING_SAMPLE, "video-1", "en", "meeting")
-        assert out.startswith("# Meeting Summary — video-1")
+        t = _transcript(title="video-1", language="en")
+        out = format_summary_markdown(EN_MEETING_SAMPLE, t, "meeting")
+        assert "# Meeting Summary — video-1" in out
         assert "## Meeting Topic" in out
         assert "Product launch" in out
         assert "## Decisions" in out
         assert "## Action Items" in out
 
     def test_meeting_fr_output(self) -> None:
-        out = format_summary_markdown(FR_MEETING_SAMPLE, "video-1", "fr", "meeting")
-        assert out.startswith("# Résumé de la réunion — video-1")
+        t = _transcript(title="video-1", language="fr")
+        out = format_summary_markdown(FR_MEETING_SAMPLE, t, "meeting")
+        assert "# Résumé de la réunion — video-1" in out
         assert "## Sujet de la réunion" in out
         assert "## Principaux enseignements" in out
         assert "Lancement produit" in out
 
     def test_source_en_output(self) -> None:
-        out = format_summary_markdown(EN_SOURCE_SAMPLE, "vid", "en", "source")
-        assert out.startswith("# Summary — vid")
+        t = _transcript(title="vid", language="en")
+        out = format_summary_markdown(EN_SOURCE_SAMPLE, t, "source")
+        assert "# Summary — vid" in out
         assert "## TL;DR" in out
         assert "## Facts" in out
         assert "## Counterpoints & Alternatives" in out
         assert "## Information Quality" in out
 
     def test_source_fr_title(self) -> None:
-        out = format_summary_markdown("", "vid", "fr", "source")
-        assert out.startswith("# Résumé — vid")
+        t = _transcript(title="vid", language="fr")
+        out = format_summary_markdown("", t, "source")
+        assert "# Résumé — vid" in out
 
     def test_missing_sections_get_defaults(self) -> None:
-        out = format_summary_markdown("", "x", "en", "meeting")
+        out = format_summary_markdown("", _transcript(title="x"), "meeting")
         assert out.count("None") >= 6
 
     def test_missing_sections_get_fr_defaults(self) -> None:
-        out = format_summary_markdown("", "x", "fr", "meeting")
+        out = format_summary_markdown("", _transcript(title="x", language="fr"), "meeting")
         assert out.count("Aucune") >= 6
 
     def test_source_path_rendered_when_provided(self) -> None:
         out = format_summary_markdown(
             EN_MEETING_SAMPLE,
-            "v",
-            "en",
+            _transcript(title="v"),
             "meeting",
             source_path="https://youtube.com/watch?v=abc",
         )
         assert "> Source: https://youtube.com/watch?v=abc" in out
 
     def test_source_path_omitted_when_none(self) -> None:
-        out = format_summary_markdown(EN_MEETING_SAMPLE, "v", "en", "meeting")
-        assert "Source:" not in out
+        out = format_summary_markdown(EN_MEETING_SAMPLE, _transcript(title="v"), "meeting")
+        assert "> Source:" not in out
 
     def test_sentiment_rendered_when_provided(self) -> None:
         out = format_summary_markdown(
             EN_MEETING_SAMPLE,
-            "v",
-            "en",
+            _transcript(title="v"),
             "meeting",
             sentiment="Positive",
         )
@@ -182,12 +206,10 @@ class TestFormatSummaryMarkdown:
         assert "Positive" in out
 
     def test_sentiment_omitted_when_none(self) -> None:
-        out = format_summary_markdown(EN_MEETING_SAMPLE, "v", "en", "meeting")
+        out = format_summary_markdown(EN_MEETING_SAMPLE, _transcript(title="v"), "meeting")
         assert "## Sentiment" not in out
 
     def test_chapters_render_with_youtube_deep_links(self) -> None:
-        from scriber.model import Chapter
-
         chapters = [
             Chapter(start_time=0, title="Intro"),
             Chapter(start_time=154.5, title="Main topic"),
@@ -195,11 +217,9 @@ class TestFormatSummaryMarkdown:
         ]
         out = format_summary_markdown(
             EN_MEETING_SAMPLE,
-            "v",
-            "en",
+            _transcript(title="v", chapters=chapters),
             "meeting",
             source_path="https://www.youtube.com/watch?v=abc",
-            chapters=chapters,
         )
         assert "## Chapters" in out
         assert "[00:00](https://www.youtube.com/watch?v=abc&t=0) Intro" in out
@@ -207,20 +227,118 @@ class TestFormatSummaryMarkdown:
         assert "[1:02:05](https://www.youtube.com/watch?v=abc&t=3725) Q & A" in out
 
     def test_chapters_render_plain_when_source_not_url(self) -> None:
-        from scriber.model import Chapter
-
         chapters = [Chapter(start_time=30, title="Intro")]
         out = format_summary_markdown(
             EN_MEETING_SAMPLE,
-            "v",
-            "en",
+            _transcript(title="v", chapters=chapters),
             "meeting",
             source_path="/local/file.mp4",
-            chapters=chapters,
         )
         assert "## Chapters" in out
         assert "- 00:30 — Intro" in out
 
     def test_chapters_section_omitted_when_empty(self) -> None:
-        out = format_summary_markdown(EN_MEETING_SAMPLE, "v", "en", "meeting")
+        out = format_summary_markdown(EN_MEETING_SAMPLE, _transcript(title="v"), "meeting")
         assert "## Chapters" not in out
+
+
+class TestFrontmatter:
+    def test_frontmatter_present_and_closed(self) -> None:
+        out = format_summary_markdown(
+            EN_MEETING_SAMPLE,
+            _transcript(title="v"),
+            "meeting",
+        )
+        lines = out.splitlines()
+        assert lines[0] == "---"
+        # There must be a closing --- before the first markdown heading.
+        closing = lines.index("---", 1)
+        assert any(line.startswith("# ") for line in lines[closing + 1 :])
+
+    def test_frontmatter_renders_core_fields(self) -> None:
+        t = _transcript(
+            title="vid",
+            language="en",
+            source="yt_manual",
+            metadata=SourceMetadata(
+                channel="Some Channel",
+                publication_date="2026-04-24",
+                detected_language="en",
+                duration_seconds=180.5,
+            ),
+        )
+        out = format_summary_markdown(
+            EN_MEETING_SAMPLE,
+            t,
+            "meeting",
+            source_path="https://youtu.be/abc",
+            sentiment="Positive",
+            processing_date="2026-04-24",
+        )
+        assert 'title: "vid"' in out
+        assert 'source_url: "https://youtu.be/abc"' in out
+        assert 'source_type: "youtube"' in out
+        assert 'transcript_source: "yt_manual"' in out
+        assert 'channel: "Some Channel"' in out
+        assert 'publication_date: "2026-04-24"' in out
+        assert 'processing_date: "2026-04-24"' in out
+        assert 'detected_language: "en"' in out
+        assert 'summary_language: "en"' in out
+        assert 'summary_mode: "meeting"' in out
+        assert "duration_seconds: 180.5" in out
+        assert "chapters_count: 0" in out
+        assert "diarized: false" in out
+        assert 'ingestion_status: "full"' in out
+        assert 'extraction_status: "ok"' in out
+        assert 'sentiment: "Positive"' in out
+        assert "keywords: []" in out
+        assert "tags: []" in out
+
+    def test_frontmatter_nulls_missing_fields(self) -> None:
+        out = format_summary_markdown(
+            EN_SOURCE_SAMPLE,
+            _transcript(title="v", source="file"),
+            "source",
+        )
+        assert "source_url: null" in out
+        assert "channel: null" in out
+        assert "publication_date: null" in out
+        assert "duration_seconds: null" in out
+        assert "sentiment: null" in out
+
+    def test_frontmatter_source_type_text_for_file_source(self) -> None:
+        out = format_summary_markdown(
+            EN_SOURCE_SAMPLE,
+            _transcript(title="v", source="file"),
+            "source",
+        )
+        assert 'source_type: "text"' in out
+
+    def test_frontmatter_source_type_media_for_local_whisper(self) -> None:
+        out = format_summary_markdown(
+            EN_SOURCE_SAMPLE,
+            _transcript(title="v", source="whisper"),
+            "source",
+            source_path="/local/video.mp4",
+        )
+        assert 'source_type: "media"' in out
+
+    def test_frontmatter_counts_chapters(self) -> None:
+        chapters = [Chapter(start_time=0, title="a"), Chapter(start_time=60, title="b")]
+        out = format_summary_markdown(
+            EN_MEETING_SAMPLE,
+            _transcript(title="v", chapters=chapters),
+            "meeting",
+        )
+        assert "chapters_count: 2" in out
+
+    def test_keywords_and_tags_rendered_as_yaml_list(self) -> None:
+        out = format_summary_markdown(
+            EN_MEETING_SAMPLE,
+            _transcript(title="v"),
+            "meeting",
+            keywords=["alpha", "beta"],
+            tags=["#ml", "#research"],
+        )
+        assert 'keywords: ["alpha", "beta"]' in out
+        assert 'tags: ["#ml", "#research"]' in out

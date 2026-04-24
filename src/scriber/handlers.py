@@ -13,6 +13,7 @@ this file — ``langdetect``'s public ``detect`` returns an annotated-but-
 from __future__ import annotations
 
 import argparse
+from dataclasses import replace
 from pathlib import Path
 from typing import cast
 
@@ -21,7 +22,7 @@ from langdetect import LangDetectException, detect
 from scriber.formatting import sanitize_filename, wrap_transcript
 from scriber.language import derive_summary_language, derive_whisper_summary_language
 from scriber.logger import my_logger
-from scriber.model import Transcript
+from scriber.model import SourceMetadata, Transcript
 from scriber.settings import Settings
 from scriber.subtitles import write_srt, write_vtt
 from scriber.summarizers import make_summarizer
@@ -57,7 +58,7 @@ def handle_url(args: argparse.Namespace, settings: Settings) -> Transcript:
         )
         return _transcribe_url_via_whisper(args, settings, requested_lang, force=force)
 
-    raw_title, chapters = pya.fetch_video_metadata(args.input_path)
+    raw_title, chapters, metadata = pya.fetch_video_metadata(args.input_path)
     summary_lang = derive_summary_language(track.lang, requested_lang)
     my_logger.info(
         f"Caption track: {track.kind} '{track.lang}'; summary language: {summary_lang}",
@@ -69,6 +70,7 @@ def handle_url(args: argparse.Namespace, settings: Settings) -> Transcript:
         source="yt_manual" if track.kind == "manual" else "yt_auto",
         diarized=False,
         chapters=chapters,
+        metadata=replace(metadata, detected_language=track.lang),
     )
 
 
@@ -80,7 +82,7 @@ def _transcribe_url_via_whisper(
     force: bool,
 ) -> Transcript:
     """Download audio and transcribe via whisper (optionally pyannote-diarized)."""
-    audio_path, raw_title, chapters = pya.download_youtube_audio(
+    audio_path, raw_title, chapters, metadata = pya.download_youtube_audio(
         args.input_path,
         settings.downloads_dir,
         force=force,
@@ -99,6 +101,7 @@ def _transcribe_url_via_whisper(
             source="whisper",
             diarized=args.diarize,
             chapters=chapters,
+            metadata=replace(metadata, detected_language=requested_lang),
         )
 
     segments: list[dict[str, object]] = []
@@ -123,6 +126,7 @@ def _transcribe_url_via_whisper(
         diarized=args.diarize,
         segments=segments,
         chapters=chapters,
+        metadata=replace(metadata, detected_language=used_lang),
     )
 
 
@@ -182,6 +186,7 @@ def handle_media(args: argparse.Namespace, settings: Settings) -> Transcript:
         source="whisper",
         diarized=args.diarize,
         segments=segments,
+        metadata=SourceMetadata(detected_language=used_lang),
     )
 
 
@@ -209,6 +214,7 @@ def handle_text(args: argparse.Namespace, settings: Settings) -> Transcript:
         title=sanitize_filename(Path(args.input_path).stem),
         source="file",
         diarized=False,
+        metadata=SourceMetadata(detected_language=detected),
     )
 
 

@@ -115,12 +115,10 @@ class OpenAICompatibleSummarizer:
 
         markdown_output = format_summary_markdown(
             content,
-            filename_stem=transcript.title,
-            language=transcript.language,
-            mode=mode,
+            transcript,
+            mode,
             source_path=input_path,
             sentiment=sentiment,
-            chapters=transcript.chapters,
         )
         suffix = "résumé" if transcript.language == "fr" else "summary"
         out_path = self.settings.output_dir / f"{transcript.title} - {suffix}.md"
