@@ -49,7 +49,6 @@ class RagSummarizer:
         try:
             raw_summary = generate_summary(
                 utterances,
-                language=transcript.language,
                 model=self._model_name(),
                 prompt=prompt,
             )

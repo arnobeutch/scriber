@@ -6,10 +6,6 @@ import pytest
 
 from scriber.model import Transcript
 from scriber.summarizers.modes import (
-    MEETING_PROMPT_EN,
-    MEETING_PROMPT_FR,
-    SOURCE_PROMPT_EN,
-    SOURCE_PROMPT_FR,
     detect_mode,
     get_prompt,
     resolve_mode,
@@ -27,17 +23,31 @@ def _t(text: str = "x", *, diarized: bool = False) -> Transcript:
 
 
 class TestGetPrompt:
-    def test_meeting_en(self) -> None:
-        assert get_prompt("meeting", "en") is MEETING_PROMPT_EN
+    def test_meeting_en_has_expected_headers(self) -> None:
+        out = get_prompt("meeting", "en")
+        assert "Topic:" in out
+        assert "Main takeaways:" in out
+        assert "Action items:" in out
+        assert "Transcript:" in out
 
-    def test_meeting_fr(self) -> None:
-        assert get_prompt("meeting", "fr") is MEETING_PROMPT_FR
+    def test_meeting_fr_has_expected_headers(self) -> None:
+        out = get_prompt("meeting", "fr")
+        assert "Sujet :" in out
+        assert "Principaux enseignements :" in out
+        assert "Actions à suivre :" in out
+        assert "Transcription :" in out
 
-    def test_source_en(self) -> None:
-        assert get_prompt("source", "en") is SOURCE_PROMPT_EN
+    def test_source_en_has_expected_headers(self) -> None:
+        out = get_prompt("source", "en")
+        assert "TL;DR:" in out
+        assert "Key takeaways:" in out
+        assert "Counterpoints / alternatives:" in out
 
-    def test_source_fr(self) -> None:
-        assert get_prompt("source", "fr") is SOURCE_PROMPT_FR
+    def test_source_fr_has_expected_headers(self) -> None:
+        out = get_prompt("source", "fr")
+        assert "TL;DR :" in out
+        assert "Points clés :" in out
+        assert "Contrepoints / alternatives :" in out
 
     def test_unsupported_language(self) -> None:
         with pytest.raises(ValueError, match="language not supported"):

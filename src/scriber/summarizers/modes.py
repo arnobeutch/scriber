@@ -11,100 +11,154 @@ if TYPE_CHECKING:
 SummaryMode = Literal["meeting", "source", "auto"]
 ResolvedMode = Literal["meeting", "source"]
 
-# --- Meeting mode ----------------------------------------------------------
+# --- Unified prompt templates ---------------------------------------------
+#
+# Each template is filled in via ``str.format(**phrases)`` where ``phrases``
+# is one of ``_MEETING_PHRASES[lang]`` / ``_SOURCE_PHRASES[lang]``. The
+# ``colon`` entry is ``:`` in EN and `` :`` in FR (French typography).
 
-MEETING_PROMPT_EN = """\
-You are an expert summarizer of a multi-speaker meeting. Given the
-transcript below, produce a structured summary in English with these
-sections (use the exact headers, in this order):
+_MEETING_TEMPLATE = """\
+{intro}
 
-Topic: <one-line meeting topic>
-Hashtags: <5-8 relevant tags on one line>
-Main takeaways:
-- <bullet> (attribute to the speaker who expressed it when possible)
-Questions / Answers:
-- <Q (asker) — A (answerer)>
-Decisions:
-- <bullet>
-Action items:
-- <action> (owner)
+{topic_label}{colon} {topic_hint}
+Hashtags{colon} {hashtags_hint}
+{takeaways_label}{colon}
+- {bullet} {speaker_attr}
+{qa_label}{colon}
+- {qa_hint}
+{decisions_label}{colon}
+- {bullet}
+{actions_label}{colon}
+- {action_hint}
 
-Transcript:
+{transcript_label}{colon}
 """
 
-MEETING_PROMPT_FR = """\
-Vous êtes un expert en résumé de réunion à plusieurs intervenants.
-À partir de la transcription ci-dessous, produisez un résumé structuré en
-français avec ces sections (utilisez exactement ces en-têtes, dans cet
-ordre) :
+_MEETING_PHRASES: dict[str, dict[str, str]] = {
+    "en": {
+        "intro": (
+            "You are an expert summarizer of a multi-speaker meeting. Given the\n"
+            "transcript below, produce a structured summary in English with these\n"
+            "sections (use the exact headers, in this order):"
+        ),
+        "colon": ":",
+        "topic_label": "Topic",
+        "topic_hint": "<one-line meeting topic>",
+        "hashtags_hint": "<5-8 relevant tags on one line>",
+        "takeaways_label": "Main takeaways",
+        "bullet": "<bullet>",
+        "speaker_attr": "(attribute to the speaker who expressed it when possible)",
+        "qa_label": "Questions / Answers",
+        "qa_hint": "<Q (asker) — A (answerer)>",
+        "decisions_label": "Decisions",
+        "actions_label": "Action items",
+        "action_hint": "<action> (owner)",
+        "transcript_label": "Transcript",
+    },
+    "fr": {
+        "intro": (
+            "Vous êtes un expert en résumé de réunion à plusieurs intervenants.\n"
+            "À partir de la transcription ci-dessous, produisez un résumé structuré en\n"
+            "français avec ces sections (utilisez exactement ces en-têtes, dans cet\n"
+            "ordre) :"
+        ),
+        "colon": " :",
+        "topic_label": "Sujet",
+        "topic_hint": "<thème de la réunion en une ligne>",
+        "hashtags_hint": "<5 à 8 hashtags pertinents sur une ligne>",
+        "takeaways_label": "Principaux enseignements",
+        "bullet": "<puce>",
+        "speaker_attr": "(attribuez la prise de parole quand possible)",
+        "qa_label": "Questions / Réponses",
+        "qa_hint": "<Q (auteur) — R (répondant)>",
+        "decisions_label": "Décisions",
+        "actions_label": "Actions à suivre",
+        "action_hint": "<action> (responsable)",
+        "transcript_label": "Transcription",
+    },
+}
 
-Sujet : <thème de la réunion en une ligne>
-Hashtags : <5 à 8 hashtags pertinents sur une ligne>
-Principaux enseignements :
-- <puce> (attribuez la prise de parole quand possible)
-Questions / Réponses :
-- <Q (auteur) — R (répondant)>
-Décisions :
-- <puce>
-Actions à suivre :
-- <action> (responsable)
+# Note the ``Topic`` mini-intro uses the word "TL;DR" which contains no
+# literal ``{}`` braces, so it is safe inside ``str.format``.
+_SOURCE_TEMPLATE = """\
+{intro}
 
-Transcription :
+TL;DR{colon} {tldr_hint}
+{key_takeaways_label}{colon}
+- {bullet}
+{facts_label}{colon}
+- {facts_hint}
+{opinions_label}{colon}
+- {opinions_hint}
+{speculation_label}{colon}
+- {speculation_hint}
+{counterpoints_label}{colon}
+- {counterpoints_hint}
+{reliability_label}{colon} {reliability_hint}
+
+{transcript_label}{colon}
 """
 
-# --- Source mode -----------------------------------------------------------
-
-SOURCE_PROMPT_EN = """\
-You are an expert critical summarizer. The transcript below is from a
-single source (lecture, interview, article reading, commentary). Produce
-a structured summary in English with these sections (use the exact
-headers, in this order):
-
-TL;DR: <2-3 sentences>
-Key takeaways:
-- <bullet>
-Facts:
-- <claim> — supported by [observation/citation/data referenced in the source]
-Opinions:
-- <claim> — speaker/author's opinion (no external evidence offered)
-Speculation / unverified:
-- <claim> — speaker speculates or asserts without support
-Counterpoints / alternatives:
-- <alternative perspective the source did not address>
-Information quality / reliability: <one short paragraph rating the
-source's overall reliability — citations, evidence quality, neutrality,
-acknowledged uncertainty>
-
-Transcript:
-"""
-
-SOURCE_PROMPT_FR = """\
-Vous êtes un expert en analyse critique. La transcription ci-dessous
-provient d'une source unique (cours, interview, lecture d'article,
-commentaire). Produisez un résumé structuré en français avec ces
-sections (utilisez exactement ces en-têtes, dans cet ordre) :
-
-TL;DR : <2 à 3 phrases>
-Points clés :
-- <puce>
-Faits :
-- <affirmation> — étayée par [observation/citation/donnée mentionnée]
-Opinions :
-- <affirmation> — opinion de l'auteur (sans preuve externe avancée)
-Spéculations / non vérifié :
-- <affirmation> — l'auteur spécule ou affirme sans étayer
-Contrepoints / alternatives :
-- <perspective alternative non abordée par la source>
-Qualité de l'information / fiabilité : <court paragraphe évaluant la
-fiabilité globale — citations, qualité des preuves, neutralité,
-incertitudes reconnues>
-
-Transcription :
-"""
+_SOURCE_PHRASES: dict[str, dict[str, str]] = {
+    "en": {
+        "intro": (
+            "You are an expert critical summarizer. The transcript below is from a\n"
+            "single source (lecture, interview, article reading, commentary). Produce\n"
+            "a structured summary in English with these sections (use the exact\n"
+            "headers, in this order):"
+        ),
+        "colon": ":",
+        "tldr_hint": "<2-3 sentences>",
+        "key_takeaways_label": "Key takeaways",
+        "bullet": "<bullet>",
+        "facts_label": "Facts",
+        "facts_hint": "<claim> — supported by [observation/citation/data referenced in the source]",
+        "opinions_label": "Opinions",
+        "opinions_hint": "<claim> — speaker/author's opinion (no external evidence offered)",
+        "speculation_label": "Speculation / unverified",
+        "speculation_hint": "<claim> — speaker speculates or asserts without support",
+        "counterpoints_label": "Counterpoints / alternatives",
+        "counterpoints_hint": "<alternative perspective the source did not address>",
+        "reliability_label": "Information quality / reliability",
+        "reliability_hint": (
+            "<one short paragraph rating the\n"
+            "source's overall reliability — citations, evidence quality, neutrality,\n"
+            "acknowledged uncertainty>"
+        ),
+        "transcript_label": "Transcript",
+    },
+    "fr": {
+        "intro": (
+            "Vous êtes un expert en analyse critique. La transcription ci-dessous\n"
+            "provient d'une source unique (cours, interview, lecture d'article,\n"
+            "commentaire). Produisez un résumé structuré en français avec ces\n"
+            "sections (utilisez exactement ces en-têtes, dans cet ordre) :"
+        ),
+        "colon": " :",
+        "tldr_hint": "<2 à 3 phrases>",
+        "key_takeaways_label": "Points clés",
+        "bullet": "<puce>",
+        "facts_label": "Faits",
+        "facts_hint": "<affirmation> — étayée par [observation/citation/donnée mentionnée]",
+        "opinions_label": "Opinions",
+        "opinions_hint": "<affirmation> — opinion de l'auteur (sans preuve externe avancée)",
+        "speculation_label": "Spéculations / non vérifié",
+        "speculation_hint": "<affirmation> — l'auteur spécule ou affirme sans étayer",
+        "counterpoints_label": "Contrepoints / alternatives",
+        "counterpoints_hint": "<perspective alternative non abordée par la source>",
+        "reliability_label": "Qualité de l'information / fiabilité",
+        "reliability_hint": (
+            "<court paragraphe évaluant la\n"
+            "fiabilité globale — citations, qualité des preuves, neutralité,\n"
+            "incertitudes reconnues>"
+        ),
+        "transcript_label": "Transcription",
+    },
+}
 
 
 def get_prompt(mode: ResolvedMode, language: str) -> str:
-    """Return the prompt template for ``(mode, language)``.
+    """Return the rendered prompt for ``(mode, language)``.
 
     Raises ``ValueError`` for unsupported language.
     """
@@ -112,8 +166,8 @@ def get_prompt(mode: ResolvedMode, language: str) -> str:
         err_msg = f"Summarizer language not supported: {language!r}"
         raise ValueError(err_msg)
     if mode == "meeting":
-        return MEETING_PROMPT_EN if language == "en" else MEETING_PROMPT_FR
-    return SOURCE_PROMPT_EN if language == "en" else SOURCE_PROMPT_FR
+        return _MEETING_TEMPLATE.format(**_MEETING_PHRASES[language])
+    return _SOURCE_TEMPLATE.format(**_SOURCE_PHRASES[language])
 
 
 # --- Auto-detect heuristic -------------------------------------------------

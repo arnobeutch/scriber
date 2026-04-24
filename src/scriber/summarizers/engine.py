@@ -7,7 +7,6 @@ from langchain_chroma import Chroma
 from langchain_core.documents import Document
 from langchain_ollama import ChatOllama, OllamaEmbeddings
 
-from scriber import constants as my_constants
 from scriber.logger import my_logger
 
 CHROMA_PERSIST_DIR = Path("chroma_db")
@@ -94,21 +93,18 @@ def build_vectorstore_from_utterances(
 
 def generate_summary(
     utterances: list[tuple[str, str]],
-    language: str,
     model: str,
-    prompt: str | None = None,
+    prompt: str,
 ) -> str:
     """Return markdown-formatted summary from structured utterances.
 
     Args:
         utterances: Speaker-tagged utterances.
-        language: 'fr' or 'en' — used only when ``prompt`` is not given.
         model: Model name for Ollama (e.g., 'mistral').
-        prompt: Override the built-in language-defaulted prompt (e.g. for
-            summary-mode templates).
+        prompt: Rendered prompt (from ``summarizers.modes.get_prompt``).
 
     Returns:
-        str: Markdown summary of the meeting in the requested language.
+        str: Markdown summary of the meeting.
 
     """
     vectorstore = build_vectorstore_from_utterances(utterances, model)
@@ -122,9 +118,5 @@ def generate_summary(
         return_source_documents=False,
     )
 
-    if prompt is None:
-        prompt = (
-            my_constants.RAG_FRENCH_PROMPT if language == "fr" else my_constants.RAG_ENGLISH_PROMPT
-        )
     result = qa_chain.invoke({"query": prompt})
     return result["result"]
