@@ -13,6 +13,14 @@ TranscriptSource = Literal["yt_manual", "yt_auto", "whisper", "file"]
 
 
 @dataclass(frozen=True)
+class Chapter:
+    """YouTube chapter metadata: start offset in seconds + title."""
+
+    start_time: float
+    title: str
+
+
+@dataclass(frozen=True)
 class Transcript:
     """In-memory representation of a transcript ready to be written / summarized."""
 
@@ -23,3 +31,5 @@ class Transcript:
     diarized: bool
     segments: list[dict[str, Any]] = field(default_factory=list[dict[str, Any]])
     """Whisper-style per-cue segments for SRT/VTT export. Empty when N/A."""
+    chapters: list[Chapter] = field(default_factory=list[Chapter])
+    """YouTube chapters when the source URL exposes them; empty otherwise."""

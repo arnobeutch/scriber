@@ -10,6 +10,7 @@ import pytest
 from scriber.transcription.youtube_audio import (
     download_youtube_audio,
     extract_video_id,
+    fetch_video_metadata,
     fetch_video_title,
 )
 
@@ -60,8 +61,54 @@ class TestFetchVideoTitle:
             assert fetch_video_title("https://youtu.be/abc") == "abc"
 
 
+class TestFetchVideoMetadata:
+    def test_parses_chapters(self) -> None:
+        with patch("scriber.transcription.youtube_audio.yt_dlp.YoutubeDL") as dl_cls:
+            ctx = MagicMock()
+            ctx.extract_info.return_value = {
+                "title": "t",
+                "id": "abc",
+                "chapters": [
+                    {"start_time": 0, "title": "Intro", "end_time": 60},
+                    {"start_time": 60.5, "title": "Main", "end_time": 300},
+                ],
+            }
+            dl_cls.return_value.__enter__.return_value = ctx
+            title, chapters = fetch_video_metadata("https://youtu.be/abc")
+        assert title == "t"
+        assert len(chapters) == 2
+        assert chapters[0].start_time == 0
+        assert chapters[0].title == "Intro"
+        assert chapters[1].start_time == 60.5
+
+    def test_empty_chapters_when_absent(self) -> None:
+        with patch("scriber.transcription.youtube_audio.yt_dlp.YoutubeDL") as dl_cls:
+            ctx = MagicMock()
+            ctx.extract_info.return_value = {"title": "t", "id": "abc"}
+            dl_cls.return_value.__enter__.return_value = ctx
+            _, chapters = fetch_video_metadata("https://youtu.be/abc")
+        assert chapters == []
+
+    def test_skips_malformed_entries(self) -> None:
+        with patch("scriber.transcription.youtube_audio.yt_dlp.YoutubeDL") as dl_cls:
+            ctx = MagicMock()
+            ctx.extract_info.return_value = {
+                "title": "t",
+                "id": "abc",
+                "chapters": [
+                    {"start_time": 0, "title": "OK"},
+                    {"start_time": "bad", "title": "Bad"},
+                    {"title": ""},
+                ],
+            }
+            dl_cls.return_value.__enter__.return_value = ctx
+            _, chapters = fetch_video_metadata("https://youtu.be/abc")
+        assert len(chapters) == 1
+        assert chapters[0].title == "OK"
+
+
 class TestDownloadYoutubeAudio:
-    def test_returns_wav_path_and_title(self, tmp_path: Path) -> None:
+    def test_returns_wav_path_title_and_chapters(self, tmp_path: Path) -> None:
         out = tmp_path / "downloads"
         wav = out / "abc123.wav"
 
@@ -69,16 +116,24 @@ class TestDownloadYoutubeAudio:
             _ = download
             out.mkdir(parents=True, exist_ok=True)
             wav.write_bytes(b"")
-            return {"id": "abc123", "title": "My Video"}
+            return {
+                "id": "abc123",
+                "title": "My Video",
+                "chapters": [{"start_time": 0, "title": "Intro"}],
+            }
 
         with patch("scriber.transcription.youtube_audio.yt_dlp.YoutubeDL") as dl_cls:
             ctx = MagicMock()
             ctx.extract_info.side_effect = fake_extract
             dl_cls.return_value.__enter__.return_value = ctx
-            audio_path, title = download_youtube_audio("https://youtu.be/abc123", out)
+            audio_path, title, chapters = download_youtube_audio(
+                "https://youtu.be/abc123",
+                out,
+            )
 
         assert audio_path == wav
         assert title == "My Video"
+        assert [c.title for c in chapters] == ["Intro"]
         assert audio_path.exists()
 
     def test_missing_output_file_raises(self, tmp_path: Path) -> None:

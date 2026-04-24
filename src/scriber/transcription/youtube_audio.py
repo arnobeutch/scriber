@@ -9,6 +9,7 @@ from typing import Any, cast
 import yt_dlp
 
 from scriber.logger import my_logger
+from scriber.model import Chapter
 
 
 def extract_video_id(url: str) -> str:
@@ -32,8 +33,23 @@ def extract_video_id(url: str) -> str:
     raise ValueError(err_msg)
 
 
-def fetch_video_title(url: str) -> str:
-    """Return the video title via yt-dlp metadata (no audio download)."""
+def _parse_chapters(info: dict[str, Any]) -> list[Chapter]:
+    raw: list[dict[str, Any]] = list(info.get("chapters") or [])
+    out: list[Chapter] = []
+    for c in raw:
+        title = str(c.get("title") or "").strip()
+        if not title:
+            continue
+        try:
+            start = float(c.get("start_time") or 0.0)
+        except (TypeError, ValueError):
+            continue
+        out.append(Chapter(start_time=start, title=title))
+    return out
+
+
+def fetch_video_metadata(url: str) -> tuple[str, list[Chapter]]:
+    """Return ``(title, chapters)`` via yt-dlp metadata (no audio download)."""
     opts: Any = {
         "quiet": True,
         "no_warnings": True,
@@ -42,7 +58,13 @@ def fetch_video_title(url: str) -> str:
     }
     with yt_dlp.YoutubeDL(opts) as ydl:
         info = cast(dict[str, Any], ydl.extract_info(url, download=False))
-    return cast(str, info.get("title") or info.get("id") or "unknown")
+    title = cast(str, info.get("title") or info.get("id") or "unknown")
+    return title, _parse_chapters(info)
+
+
+def fetch_video_title(url: str) -> str:
+    """Return the video title via yt-dlp metadata (no audio download)."""
+    return fetch_video_metadata(url)[0]
 
 
 def download_youtube_audio(
@@ -50,7 +72,7 @@ def download_youtube_audio(
     output_dir: Path,
     *,
     force: bool = False,
-) -> tuple[Path, str]:
+) -> tuple[Path, str, list[Chapter]]:
     """Download the audio track of a YouTube video as a wav file.
 
     Args:
@@ -59,8 +81,9 @@ def download_youtube_audio(
         force: If True, re-download even if the .wav already exists.
 
     Returns:
-        ``(audio_path, video_title)`` — path to the downloaded wav and the
-        video's human-readable title (unsanitized).
+        ``(audio_path, video_title, chapters)`` — path to the downloaded wav,
+        the video's human-readable title (unsanitized), and its chapter list
+        (empty when the video has no chapters).
 
     """
     output_dir.mkdir(parents=True, exist_ok=True)
@@ -71,8 +94,8 @@ def download_youtube_audio(
         cached_wav = output_dir / f"{video_id}.wav"
         if cached_wav.exists():
             my_logger.info(f"Using cached audio at {cached_wav}")
-            title = fetch_video_title(url)
-            return cached_wav, title
+            title, chapters = fetch_video_metadata(url)
+            return cached_wav, title, chapters
 
     my_logger.info(f"Downloading audio from {url}")
 
@@ -94,8 +117,9 @@ def download_youtube_audio(
         info = cast(dict[str, Any], ydl.extract_info(url, download=True))
     video_id = cast(str, info["id"])
     title = cast(str, info.get("title") or video_id)
+    chapters = _parse_chapters(info)
     audio_path = output_dir / f"{video_id}.wav"
     if not audio_path.exists():
         err_msg = f"yt-dlp reported success but {audio_path} is missing"
         raise FileNotFoundError(err_msg)
-    return audio_path, title
+    return audio_path, title, chapters

@@ -184,3 +184,43 @@ class TestFormatSummaryMarkdown:
     def test_sentiment_omitted_when_none(self) -> None:
         out = format_summary_markdown(EN_MEETING_SAMPLE, "v", "en", "meeting")
         assert "## Sentiment" not in out
+
+    def test_chapters_render_with_youtube_deep_links(self) -> None:
+        from scriber.model import Chapter
+
+        chapters = [
+            Chapter(start_time=0, title="Intro"),
+            Chapter(start_time=154.5, title="Main topic"),
+            Chapter(start_time=3725, title="Q & A"),
+        ]
+        out = format_summary_markdown(
+            EN_MEETING_SAMPLE,
+            "v",
+            "en",
+            "meeting",
+            source_path="https://www.youtube.com/watch?v=abc",
+            chapters=chapters,
+        )
+        assert "## Chapters" in out
+        assert "[00:00](https://www.youtube.com/watch?v=abc&t=0) Intro" in out
+        assert "[02:34](https://www.youtube.com/watch?v=abc&t=154) Main topic" in out
+        assert "[1:02:05](https://www.youtube.com/watch?v=abc&t=3725) Q & A" in out
+
+    def test_chapters_render_plain_when_source_not_url(self) -> None:
+        from scriber.model import Chapter
+
+        chapters = [Chapter(start_time=30, title="Intro")]
+        out = format_summary_markdown(
+            EN_MEETING_SAMPLE,
+            "v",
+            "en",
+            "meeting",
+            source_path="/local/file.mp4",
+            chapters=chapters,
+        )
+        assert "## Chapters" in out
+        assert "- 00:30 — Intro" in out
+
+    def test_chapters_section_omitted_when_empty(self) -> None:
+        out = format_summary_markdown(EN_MEETING_SAMPLE, "v", "en", "meeting")
+        assert "## Chapters" not in out

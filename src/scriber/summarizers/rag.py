@@ -64,6 +64,7 @@ class RagSummarizer:
             mode=mode,
             source_path=input_path,
             sentiment=sentiment,
+            chapters=transcript.chapters,
         )
 
         suffix = "résumé" if transcript.language == "fr" else "summary"

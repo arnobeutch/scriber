@@ -51,14 +51,15 @@ class TestDownloadCache:
         (out / "abc.wav").write_bytes(b"")
         with (
             patch(
-                "scriber.transcription.youtube_audio.fetch_video_title",
-                return_value="Cached Title",
+                "scriber.transcription.youtube_audio.fetch_video_metadata",
+                return_value=("Cached Title", []),
             ) as fetch,
             patch("scriber.transcription.youtube_audio.yt_dlp.YoutubeDL") as ydl,
         ):
-            audio_path, title = download_youtube_audio("https://youtu.be/abc", out)
+            audio_path, title, chapters = download_youtube_audio("https://youtu.be/abc", out)
         assert audio_path == out / "abc.wav"
         assert title == "Cached Title"
+        assert chapters == []
         ydl.assert_not_called()
         fetch.assert_called_once()
 
@@ -78,7 +79,7 @@ class TestDownloadCache:
 
         ctx.extract_info.side_effect = _extract_info
         with patch("scriber.transcription.youtube_audio.yt_dlp.YoutubeDL", return_value=ctx) as ydl:
-            audio_path, title = download_youtube_audio(
+            audio_path, title, _ = download_youtube_audio(
                 "https://youtu.be/abc",
                 out,
                 force=True,
@@ -102,7 +103,7 @@ class TestHandleUrlCachedTranscript:
             ),
             patch(
                 "scriber.handlers.pya.download_youtube_audio",
-                return_value=(s.downloads_dir / "abc.wav", "Vid"),
+                return_value=(s.downloads_dir / "abc.wav", "Vid", []),
             ),
             patch("scriber.handlers.plt.transcribe_audio_full") as transcribe,
         ):
@@ -122,7 +123,7 @@ class TestHandleUrlCachedTranscript:
             ),
             patch(
                 "scriber.handlers.pya.download_youtube_audio",
-                return_value=(s.downloads_dir / "abc.wav", "Vid"),
+                return_value=(s.downloads_dir / "abc.wav", "Vid", []),
             ),
             patch(
                 "scriber.handlers.plt.transcribe_audio_full",

@@ -86,6 +86,7 @@ class OpenAICompatibleSummarizer:
             mode=mode,
             source_path=input_path,
             sentiment=sentiment,
+            chapters=transcript.chapters,
         )
         suffix = "résumé" if transcript.language == "fr" else "summary"
         out_path = self.settings.output_dir / f"{transcript.title} - {suffix}.md"

@@ -66,7 +66,10 @@ class TestHandleUrl:
         s = _settings(output_dir=tmp_path / "out", downloads_dir=tmp_path / "dl")
         with (
             patch("scriber.handlers.pya.extract_video_id", return_value="vid"),
-            patch("scriber.handlers.pya.fetch_video_title", return_value="My Video"),
+            patch(
+                "scriber.handlers.pya.fetch_video_metadata",
+                return_value=("My Video", []),
+            ),
             patch(
                 "scriber.handlers.pytt.get_youtube_transcript",
                 return_value=_track(text="bonjour", lang="fr", kind="manual"),
@@ -83,7 +86,7 @@ class TestHandleUrl:
         s = _settings(output_dir=tmp_path / "out", downloads_dir=tmp_path / "dl")
         with (
             patch("scriber.handlers.pya.extract_video_id", return_value="vid"),
-            patch("scriber.handlers.pya.fetch_video_title", return_value="V"),
+            patch("scriber.handlers.pya.fetch_video_metadata", return_value=("V", [])),
             patch(
                 "scriber.handlers.pytt.get_youtube_transcript",
                 return_value=_track(text="hallo", lang="de", kind="manual"),
@@ -97,7 +100,7 @@ class TestHandleUrl:
         s = _settings(output_dir=tmp_path / "out", downloads_dir=tmp_path / "dl")
         with (
             patch("scriber.handlers.pya.extract_video_id", return_value="vid"),
-            patch("scriber.handlers.pya.fetch_video_title", return_value="V"),
+            patch("scriber.handlers.pya.fetch_video_metadata", return_value=("V", [])),
             patch(
                 "scriber.handlers.pytt.get_youtube_transcript",
                 return_value=_track(text="x", lang="en", kind="auto"),
@@ -119,7 +122,7 @@ class TestHandleUrl:
             ),
             patch(
                 "scriber.handlers.pya.download_youtube_audio",
-                return_value=(tmp_path / "audio.wav", "Remote Video"),
+                return_value=(tmp_path / "audio.wav", "Remote Video", []),
             ),
             patch(
                 "scriber.handlers.plt.transcribe_audio_full",
@@ -151,7 +154,7 @@ class TestHandleUrl:
             ),
             patch(
                 "scriber.handlers.pya.download_youtube_audio",
-                return_value=(tmp_path / "audio.wav", "Diarized"),
+                return_value=(tmp_path / "audio.wav", "Diarized", []),
             ),
             patch(
                 "scriber.handlers.plt.transcribe_audio_with_diarization",
@@ -183,7 +186,7 @@ class TestHandleUrl:
             ),
             patch(
                 "scriber.handlers.pya.download_youtube_audio",
-                return_value=(tmp_path / "audio.wav", "X"),
+                return_value=(tmp_path / "audio.wav", "X", []),
             ),
             patch(
                 "scriber.handlers.plt.transcribe_audio_full",
@@ -210,7 +213,7 @@ class TestHandleUrl:
             ),
             patch(
                 "scriber.handlers.pya.download_youtube_audio",
-                return_value=(tmp_path / "audio.wav", "V"),
+                return_value=(tmp_path / "audio.wav", "V", []),
             ),
             patch(
                 "scriber.handlers.plt.transcribe_audio_full",
@@ -230,7 +233,10 @@ class TestHandleUrl:
         s = _settings(output_dir=tmp_path / "out", downloads_dir=tmp_path / "dl")
         with (
             patch("scriber.handlers.pya.extract_video_id", return_value="vid"),
-            patch("scriber.handlers.pya.fetch_video_title", return_value="Bad/Name:Here"),
+            patch(
+                "scriber.handlers.pya.fetch_video_metadata",
+                return_value=("Bad/Name:Here", []),
+            ),
             patch("scriber.handlers.pytt.get_youtube_transcript", return_value=_track()),
         ):
             t = handle_url(_args(input_path="https://y.com/watch?v=vid"), s)

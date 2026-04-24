@@ -46,7 +46,7 @@ def handle_url(args: argparse.Namespace, settings: Settings) -> Transcript:
             f"No YouTube transcript available ({exc.reason}: {exc}) — "
             f"falling back to local transcription.",
         )
-        audio_path, raw_title = pya.download_youtube_audio(
+        audio_path, raw_title, chapters = pya.download_youtube_audio(
             args.input_path,
             settings.downloads_dir,
             force=force,
@@ -64,6 +64,7 @@ def handle_url(args: argparse.Namespace, settings: Settings) -> Transcript:
                 title=title,
                 source="whisper",
                 diarized=args.diarize,
+                chapters=chapters,
             )
 
         segments: list[dict[str, object]] = []
@@ -87,8 +88,10 @@ def handle_url(args: argparse.Namespace, settings: Settings) -> Transcript:
             source="whisper",
             diarized=args.diarize,
             segments=segments,
+            chapters=chapters,
         )
 
+    raw_title, chapters = pya.fetch_video_metadata(args.input_path)
     summary_lang = derive_summary_language(track.lang, requested_lang)
     my_logger.info(
         f"Caption track: {track.kind} '{track.lang}'; summary language: {summary_lang}",
@@ -96,9 +99,10 @@ def handle_url(args: argparse.Namespace, settings: Settings) -> Transcript:
     return Transcript(
         text=track.text,
         language=summary_lang,
-        title=sanitize_filename(pya.fetch_video_title(args.input_path)),
+        title=sanitize_filename(raw_title),
         source="yt_manual" if track.kind == "manual" else "yt_auto",
         diarized=False,
+        chapters=chapters,
     )
 
 
