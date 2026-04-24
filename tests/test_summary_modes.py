@@ -41,6 +41,7 @@ class TestGetPrompt:
         out = get_prompt("source", "en")
         assert "Summary:" in out
         assert "Main claims:" in out
+        assert "Notable quotes:" in out
         assert "Factually correct:" in out
         assert "Likely but unconfirmed:" in out
         assert "Interpretation or weakly substantiated:" in out
@@ -52,6 +53,7 @@ class TestGetPrompt:
         out = get_prompt("source", "fr")
         assert "Résumé :" in out
         assert "Thèses principales :" in out
+        assert "Citations notables :" in out
         assert "Factuellement correct :" in out
         assert "Probable mais non confirmé :" in out
         assert "Interprétation ou faiblement étayé :" in out

@@ -65,6 +65,7 @@ MEETING_SECTION_HEADERS: dict[str, dict[str, str]] = {
 SOURCE_SECTION_KEYS: tuple[str, ...] = (
     "summary",
     "claims",
+    "quotes",
     "factual",
     "likely",
     "interpretation",
@@ -78,6 +79,7 @@ SOURCE_SECTION_LABELS: dict[str, dict[str, str]] = {
     "fr": {
         "summary": "Résumé",
         "claims": "Thèses principales",
+        "quotes": "Citations notables",
         "factual": "Factuellement correct",
         "likely": "Probable mais non confirmé",
         "interpretation": "Interprétation ou faiblement étayé",
@@ -89,6 +91,7 @@ SOURCE_SECTION_LABELS: dict[str, dict[str, str]] = {
     "en": {
         "summary": "Summary",
         "claims": "Main claims",
+        "quotes": "Notable quotes",
         "factual": "Factually correct",
         "likely": "Likely but unconfirmed",
         "interpretation": "Interpretation or weakly substantiated",
@@ -103,6 +106,7 @@ SOURCE_SECTION_HEADERS: dict[str, dict[str, str]] = {
     "fr": {
         "summary": "## Résumé",
         "claims": "## Thèses principales",
+        "quotes": "## Citations notables",
         "factual": "## Ce qui est factuellement correct",
         "likely": "## Ce qui est probable mais non confirmé",
         "interpretation": "## Ce qui relève de l'interprétation ou est faiblement étayé",
@@ -114,6 +118,7 @@ SOURCE_SECTION_HEADERS: dict[str, dict[str, str]] = {
     "en": {
         "summary": "## Summary",
         "claims": "## Main Claims",
+        "quotes": "## Notable Quotes",
         "factual": "## What Is Factually Correct",
         "likely": "## What Is Likely but Unconfirmed",
         "interpretation": "## What Is Interpretation or Weakly Substantiated",

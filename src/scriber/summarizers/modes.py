@@ -109,6 +109,8 @@ _SOURCE_TEMPLATE = """\
 1. {claim_hint}
 2. {claim_hint}
 3. {claim_hint}
+{quotes_label}{colon}
+{quote_hint}
 {factual_label}{colon}
 - {factual_hint}
 {likely_label}{colon}
@@ -142,6 +144,13 @@ _SOURCE_PHRASES: dict[str, dict[str, str]] = {
         "summary_hint": "<1-2 sentence overview of what the source argues>",
         "claims_label": "Main claims",
         "claim_hint": "<claim>",
+        "quotes_label": "Notable quotes",
+        "quote_hint": (
+            '> "<verbatim quote from the source>"\n'
+            ">\n"
+            "> — <speaker or author name; 'Unknown' if unattributable>\n"
+            '(include 1-3 quotes; if none attributable, write "None identified")'
+        ),
         "factual_label": "Factually correct",
         "factual_hint": (
             "<claim> — supported by <observation/citation/data referenced in the source>"
@@ -177,6 +186,13 @@ _SOURCE_PHRASES: dict[str, dict[str, str]] = {
         "summary_hint": "<aperçu en 1-2 phrases de la thèse de la source>",
         "claims_label": "Thèses principales",
         "claim_hint": "<thèse>",
+        "quotes_label": "Citations notables",
+        "quote_hint": (
+            "> « <citation verbatim tirée de la source> »\n"
+            ">\n"
+            "> — <intervenant ou auteur ; « Inconnu » si non identifiable>\n"
+            "(inclure 1-3 citations ; si aucune attribuable, écrire « Aucune identifiée »)"
+        ),
         "factual_label": "Factuellement correct",
         "factual_hint": (
             "<affirmation> — étayée par <observation/citation/donnée mentionnée dans la source>"

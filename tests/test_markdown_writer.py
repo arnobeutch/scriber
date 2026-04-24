@@ -58,6 +58,10 @@ Main claims:
 1. Claim one
 2. Claim two
 3. Claim three
+Notable quotes:
+> "Scaling laws are log-linear across three orders of magnitude."
+>
+> — Jane Doe
 Factually correct:
 - F1 — supported by the paper
 Likely but unconfirmed:
@@ -95,6 +99,8 @@ class TestExtractSections:
         result = extract_sections(EN_SOURCE_SAMPLE, "source", "en")
         assert "author argues" in result["summary"]
         assert "Claim one" in result["claims"]
+        assert "Scaling laws" in result["quotes"]
+        assert "Jane Doe" in result["quotes"]
         assert "F1" in result["factual"]
         assert "L1" in result["likely"]
         assert "I1" in result["interpretation"]
@@ -173,6 +179,9 @@ class TestFormatSummaryMarkdown:
         assert "# Summary — vid" in out
         assert "## Summary" in out
         assert "## Main Claims" in out
+        assert "## Notable Quotes" in out
+        assert "Scaling laws are log-linear" in out
+        assert "Jane Doe" in out
         assert "## What Is Factually Correct" in out
         assert "## What Is Likely but Unconfirmed" in out
         assert "## What Is Interpretation or Weakly Substantiated" in out
