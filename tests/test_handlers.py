@@ -141,6 +141,30 @@ class TestHandleUrl:
             language=None,
         )
 
+    def test_diarize_flag_skips_captions_for_yt_urls(self, tmp_path: Path) -> None:
+        s = _settings(output_dir=tmp_path / "out", downloads_dir=tmp_path / "dl")
+        with (
+            patch("scriber.handlers.pya.extract_video_id", return_value="vid"),
+            patch("scriber.handlers.pytt.get_youtube_transcript") as get_captions,
+            patch(
+                "scriber.handlers.pya.download_youtube_audio",
+                return_value=(tmp_path / "audio.wav", "Vid", []),
+            ),
+            patch(
+                "scriber.handlers.plt.transcribe_audio_with_diarization",
+                return_value=("SPEAKER_00: hello", "en"),
+            ) as transcribe,
+        ):
+            t = handle_url(
+                _args(input_path="https://y.com/watch?v=vid", diarize=True),
+                s,
+            )
+        # Captions are bypassed entirely when diarization is requested.
+        get_captions.assert_not_called()
+        transcribe.assert_called_once()
+        assert t.diarized is True
+        assert t.source == "whisper"
+
     def test_fallback_with_diarization(
         self,
         tmp_path: Path,

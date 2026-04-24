@@ -32,11 +32,20 @@ from scriber.transcription.youtube_captions import TranscriptUnavailableError
 
 
 def handle_url(args: argparse.Namespace, settings: Settings) -> Transcript:
-    """Fetch a YT transcript honoring the language ladder; whisper-fallback if absent."""
+    """Fetch a YT transcript honoring the language ladder; whisper-fallback if absent.
+
+    When ``--diarize`` is set the caption shortcut is skipped — captions
+    don't carry speaker attribution, so we always go through whisper +
+    pyannote on the downloaded audio.
+    """
     video_id = pya.extract_video_id(args.input_path)
     my_logger.debug(f"Video ID: {video_id}")
     requested_lang: str | None = args.language
     force: bool = bool(getattr(args, "force", False))
+
+    if args.diarize:
+        my_logger.info("--diarize requested — skipping captions, downloading audio.")
+        return _transcribe_url_via_whisper(args, settings, requested_lang, force=force)
 
     try:
         track = pytt.get_youtube_transcript(video_id, requested_lang=requested_lang)
@@ -46,50 +55,7 @@ def handle_url(args: argparse.Namespace, settings: Settings) -> Transcript:
             f"No YouTube transcript available ({exc.reason}: {exc}) — "
             f"falling back to local transcription.",
         )
-        audio_path, raw_title, chapters = pya.download_youtube_audio(
-            args.input_path,
-            settings.downloads_dir,
-            force=force,
-        )
-        title = sanitize_filename(raw_title)
-
-        cached = _try_load_cached_transcript(title, settings, diarize=args.diarize, force=force)
-        if cached is not None:
-            return Transcript(
-                text=cached,
-                language=derive_whisper_summary_language(
-                    requested_lang or "en",
-                    requested_lang,
-                ),
-                title=title,
-                source="whisper",
-                diarized=args.diarize,
-                chapters=chapters,
-            )
-
-        segments: list[dict[str, object]] = []
-        if args.diarize:
-            transcribed_text, used_lang = plt.transcribe_audio_with_diarization(
-                str(audio_path),
-                model_size=settings.whisper_model_size,
-                language=requested_lang,
-            )
-        else:
-            transcribed_text, used_lang, segments = plt.transcribe_audio_full(
-                str(audio_path),
-                model_size=settings.whisper_model_size,
-                language=requested_lang,
-            )
-        summary_lang = derive_whisper_summary_language(used_lang, requested_lang)
-        return Transcript(
-            text=transcribed_text,
-            language=summary_lang,
-            title=title,
-            source="whisper",
-            diarized=args.diarize,
-            segments=segments,
-            chapters=chapters,
-        )
+        return _transcribe_url_via_whisper(args, settings, requested_lang, force=force)
 
     raw_title, chapters = pya.fetch_video_metadata(args.input_path)
     summary_lang = derive_summary_language(track.lang, requested_lang)
@@ -102,6 +68,60 @@ def handle_url(args: argparse.Namespace, settings: Settings) -> Transcript:
         title=sanitize_filename(raw_title),
         source="yt_manual" if track.kind == "manual" else "yt_auto",
         diarized=False,
+        chapters=chapters,
+    )
+
+
+def _transcribe_url_via_whisper(
+    args: argparse.Namespace,
+    settings: Settings,
+    requested_lang: str | None,
+    *,
+    force: bool,
+) -> Transcript:
+    """Download audio and transcribe via whisper (optionally pyannote-diarized)."""
+    audio_path, raw_title, chapters = pya.download_youtube_audio(
+        args.input_path,
+        settings.downloads_dir,
+        force=force,
+    )
+    title = sanitize_filename(raw_title)
+
+    cached = _try_load_cached_transcript(title, settings, diarize=args.diarize, force=force)
+    if cached is not None:
+        return Transcript(
+            text=cached,
+            language=derive_whisper_summary_language(
+                requested_lang or "en",
+                requested_lang,
+            ),
+            title=title,
+            source="whisper",
+            diarized=args.diarize,
+            chapters=chapters,
+        )
+
+    segments: list[dict[str, object]] = []
+    if args.diarize:
+        transcribed_text, used_lang = plt.transcribe_audio_with_diarization(
+            str(audio_path),
+            model_size=settings.whisper_model_size,
+            language=requested_lang,
+        )
+    else:
+        transcribed_text, used_lang, segments = plt.transcribe_audio_full(
+            str(audio_path),
+            model_size=settings.whisper_model_size,
+            language=requested_lang,
+        )
+    summary_lang = derive_whisper_summary_language(used_lang, requested_lang)
+    return Transcript(
+        text=transcribed_text,
+        language=summary_lang,
+        title=title,
+        source="whisper",
+        diarized=args.diarize,
+        segments=segments,
         chapters=chapters,
     )
 
