@@ -59,7 +59,12 @@ def handle_url(args: argparse.Namespace, settings: Settings) -> Transcript:
         return _transcribe_url_via_whisper(args, settings, requested_lang, force=force)
 
     raw_title, chapters, metadata = pya.fetch_video_metadata(args.input_path)
-    summary_lang = derive_summary_language(track.lang, requested_lang)
+    # When --language wasn't set, the uploader-declared language (relayed via
+    # CaptionTrack) acts as the implicit preference for the summary too —
+    # otherwise a French video with an English manual sub would yield an
+    # English summary even though we just picked the French track.
+    effective_lang = requested_lang or track.declared_language
+    summary_lang = derive_summary_language(track.lang, effective_lang)
     my_logger.info(
         f"Caption track: {track.kind} '{track.lang}'; summary language: {summary_lang}",
     )

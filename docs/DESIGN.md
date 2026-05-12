@@ -381,8 +381,9 @@ where a transcript is produced.
 
 ```
 ┌─ captions (yt_manual / yt_auto) ────────────────────────────┐
-│  derive_summary_language(caption_lang, requested_lang)       │
-│    if requested_lang == caption_lang   → requested_lang      │
+│  effective_lang = requested_lang or track.declared_language  │
+│  derive_summary_language(caption_lang, effective_lang)       │
+│    if effective_lang == caption_lang   → effective_lang      │
 │    if caption_lang == "en"             → "en"                │
 │    else                                → "en"   (forced)     │
 └──────────────────────────────────────────────────────────────┘
@@ -402,6 +403,14 @@ where a transcript is produced.
 EN is always the safe fallback. The prompt templates are only written
 for EN / FR; `get_prompt` raises `ValueError` for anything else, which
 is why the ladder has to collapse other languages to EN.
+
+The **declared video language** (`track.declared_language`, from
+yt-dlp's `info["language"]` normalized to a 2-letter code) acts as the
+implicit `requested_lang` when the CLI flag is unset. The caption
+picker in `youtube_captions.get_youtube_transcript` does the
+substitution itself, and `handlers.handle_url` re-applies the same
+`requested_lang or track.declared_language` when deriving the summary
+language so the two stay in sync.
 
 `--language` on the CLI is a **preference hint**, not a hard override.
 It biases caption-track selection and forces whisper's input language,

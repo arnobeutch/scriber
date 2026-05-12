@@ -37,6 +37,12 @@ class CaptionTrack:
     text: str
     lang: str
     kind: CaptionKind
+    declared_language: str | None = None
+    """Uploader-declared video language from yt-dlp's ``info["language"]``
+    (normalised to a 2-letter code). When the user did not pass
+    ``--language``, the caller treats this as the implicit requested
+    language so the caption ladder doesn't fall through to manual EN on
+    a non-English video that happens to ship English subtitles."""
 
 
 class TranscriptUnavailableError(Exception):
@@ -204,7 +210,24 @@ def get_youtube_transcript(video_id: str, requested_lang: str | None = None) -> 
         )
         my_logger.info(f"Caption tracks found: {track_list}")
 
-        pick = _pick_caption(info, requested_lang=requested_lang)
+        # Uploader-declared video language (BCP-47 from yt-dlp). Normalise to a
+        # 2-letter code for downstream use.
+        declared_raw = info.get("language")
+        declared_lang: str | None = None
+        if isinstance(declared_raw, str) and declared_raw.strip():
+            declared_lang = declared_raw.strip().split("-")[0]
+
+        # When the user didn't pass --language, use the declared language as
+        # the implicit preference so the ladder prefers manual @ declared over
+        # the manual-English fallback. Explicit --language always wins.
+        effective_lang = requested_lang or declared_lang
+        if effective_lang and effective_lang != requested_lang:
+            my_logger.info(
+                f"No --language set; using declared language '{declared_lang}' "
+                "as the implicit preference.",
+            )
+
+        pick = _pick_caption(info, requested_lang=effective_lang)
         if pick is None:
             raise TranscriptUnavailableError(
                 "lang_not_found",
@@ -254,4 +277,4 @@ def get_youtube_transcript(video_id: str, requested_lang: str | None = None) -> 
         )
 
     wrapped = textwrap.fill(text, width=80, break_long_words=False, break_on_hyphens=False)
-    return CaptionTrack(text=wrapped, lang=lang, kind=kind)
+    return CaptionTrack(text=wrapped, lang=lang, kind=kind, declared_language=declared_lang)

@@ -218,6 +218,52 @@ class TestGetYoutubeTranscript:
             track = get_youtube_transcript("abc", requested_lang="fr")
         assert track.lang == "fr"
 
+    def test_declared_language_used_as_implicit_request(self) -> None:
+        # Mirrors the Vlmn6j_bIhI case: French video with manual EN+FR subs,
+        # no --language flag. Without the implicit-from-declared fallback the
+        # picker would land on manual EN; with it, we prefer the declared lang.
+        info: dict[str, Any] = {
+            "id": "abc",
+            "language": "fr",
+            "subtitles": {"en": [{}], "fr": [{}]},
+            "automatic_captions": {"en": [{}]},
+        }
+        ydl = _ydl_returning(info, write_files={"abc.fr.srt": _SAMPLE_SRT})
+        with patch("scriber.transcription.youtube_captions.yt_dlp.YoutubeDL", ydl):
+            track = get_youtube_transcript("abc")  # no requested_lang
+        assert track.lang == "fr"
+        assert track.kind == "manual"
+        assert track.declared_language == "fr"
+
+    def test_explicit_request_overrides_declared(self) -> None:
+        # --language en against a declared-fr video should still pick EN.
+        info: dict[str, Any] = {
+            "id": "abc",
+            "language": "fr",
+            "subtitles": {"en": [{}], "fr": [{}]},
+            "automatic_captions": {},
+        }
+        ydl = _ydl_returning(info, write_files={"abc.en.srt": _SAMPLE_SRT})
+        with patch("scriber.transcription.youtube_captions.yt_dlp.YoutubeDL", ydl):
+            track = get_youtube_transcript("abc", requested_lang="en")
+        assert track.lang == "en"
+        assert track.declared_language == "fr"
+
+    def test_declared_language_bcp47_normalized(self) -> None:
+        # ``info["language"]`` may be a BCP-47 tag like ``"pt-BR"``; we keep
+        # just the base 2-letter code on the CaptionTrack.
+        info: dict[str, Any] = {
+            "id": "abc",
+            "language": "pt-BR",
+            "subtitles": {"en": [{}], "pt": [{}]},
+            "automatic_captions": {},
+        }
+        ydl = _ydl_returning(info, write_files={"abc.pt.srt": _SAMPLE_SRT})
+        with patch("scriber.transcription.youtube_captions.yt_dlp.YoutubeDL", ydl):
+            track = get_youtube_transcript("abc")
+        assert track.lang == "pt"
+        assert track.declared_language == "pt"
+
     def test_no_captions_raises_lang_not_found(self) -> None:
         info: dict[str, Any] = {
             "id": "abc",

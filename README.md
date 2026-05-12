@@ -69,19 +69,19 @@ Re-running with the same input is fast: the YT audio is reused from `./downloads
 
 The summary follows the source's language; `--language` is a preference hint, not a hard override.
 
-For YouTube URLs the caption track is picked top-down (manual beats auto across languages):
+For YouTube URLs the caption track is picked top-down (manual beats auto across languages). When `--language` isn't set, scriber substitutes the uploader-declared video language (yt-dlp's `info["language"]`) as the implicit preference, so a French video that ships an English subtitle track doesn't accidentally yield an English transcript.
 
-1. Manual captions in `--language` (if set)
-2. Auto captions in `--language` (if set)
-3. Manual captions in English
-4. Auto captions in English
-5. Manual captions in any other language
+1. Manual captions in `--language` (if set) — or in the declared video language when `--language` is unset
+2. Manual captions in English
+3. Manual captions in any other language
+4. Auto captions in `--language` (if set) — or declared video language when `--language` is unset
+5. Auto captions in English
 6. Auto captions in any other language
 7. *No captions* → fall back to whisper
 
 Once a track is picked, the summary language is derived:
 
-- caption is in `--language` or English → summary in that language
+- caption is in the effective preference (CLI flag or declared lang) or English → summary in that language
 - caption is in some other language → summary in **English** (translated by the LLM)
 
 When whisper transcribes (no captions available, or local media):

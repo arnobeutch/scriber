@@ -18,8 +18,18 @@ from scriber.settings import Settings
 from scriber.transcription.youtube_captions import CaptionTrack, TranscriptUnavailableError
 
 
-def _track(text: str = "caption text", lang: str = "en", kind: str = "manual") -> CaptionTrack:
-    return CaptionTrack(text=text, lang=lang, kind=kind)  # type: ignore[arg-type]  # kind is Literal
+def _track(
+    text: str = "caption text",
+    lang: str = "en",
+    kind: str = "manual",
+    declared_language: str | None = None,
+) -> CaptionTrack:
+    return CaptionTrack(
+        text=text,
+        lang=lang,
+        kind=kind,  # type: ignore[arg-type]  # kind is Literal in production
+        declared_language=declared_language,
+    )
 
 
 def _md(**overrides: object) -> SourceMetadata:
@@ -88,6 +98,31 @@ class TestHandleUrl:
         assert t.source == "yt_manual"
         assert t.language == "fr"
         assert t.diarized is False
+
+    def test_declared_lang_drives_summary_when_no_cli_flag(self, tmp_path: Path) -> None:
+        # Regression for the Vlmn6j_bIhI case: declared-fr video, no --language
+        # set. The picker chose manual fr; the summary should follow.
+        s = _settings(output_dir=tmp_path / "out", downloads_dir=tmp_path / "dl")
+        with (
+            patch("scriber.handlers.pya.extract_video_id", return_value="vid"),
+            patch(
+                "scriber.handlers.pya.fetch_video_metadata",
+                return_value=("Le Titre", [], _md()),
+            ),
+            patch(
+                "scriber.handlers.pytt.get_youtube_transcript",
+                return_value=_track(
+                    text="bonjour",
+                    lang="fr",
+                    kind="manual",
+                    declared_language="fr",
+                ),
+            ),
+        ):
+            t = handle_url(_args(input_path="https://y.com/watch?v=vid"), s)
+        assert t.language == "fr"  # would be "en" before the fix
+        assert t.text == "bonjour"
+        assert t.source == "yt_manual"
 
     def test_caption_other_lang_forces_summary_in_english(self, tmp_path: Path) -> None:
         s = _settings(output_dir=tmp_path / "out", downloads_dir=tmp_path / "dl")
