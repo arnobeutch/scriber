@@ -24,3 +24,4 @@ test_openai_api.py
 results/*
 chroma_db
 downloads/
+experiments/

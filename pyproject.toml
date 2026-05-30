@@ -51,6 +51,7 @@ markers = [
 [tool.ruff]
 line-length = 100
 target-version = "py311"  # 2026-04-22: diverges from Boilerplate (py313) — deps pin Python 3.11.9
+extend-exclude = ["experiments"]
 
 [tool.ruff.lint]
 select = ["ALL"]
