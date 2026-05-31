@@ -9,7 +9,7 @@ import os
 from dataclasses import dataclass, field
 from pathlib import Path
 
-_DEFAULT_WHISPER_MODEL_SIZE = "small"
+_DEFAULT_WHISPER_MODEL_SIZE = "large-v3-turbo"
 _DEFAULT_OPENAI_MODEL = "gpt-4o"
 _DEFAULT_OLLAMA_MODEL = "mistral"
 _DEFAULT_LLM_PROVIDER = "openai"

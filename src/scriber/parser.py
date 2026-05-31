@@ -79,11 +79,14 @@ def _add_shared_args(sub: argparse.ArgumentParser) -> None:
     sub.add_argument(
         "--model-size",
         dest="model_size",
-        choices={"tiny", "base", "small", "medium", "large"},
+        choices={"tiny", "base", "small", "medium", "large", "large-v3", "large-v3-turbo"},
         default=None,
         help=(
             "Whisper model size for local transcription. "
-            "Default: env WHISPER_MODEL_SIZE, or 'small'."
+            "Default: env WHISPER_MODEL_SIZE, or 'large-v3-turbo' "
+            "(best WER among CPU-practical models; faster than 'medium' on the "
+            "same hardware — see docs/DESIGN.md and the transcription-tuning bench). "
+            "'medium' is functionally obsolete; pick 'small' for a speed-first draft."
         ),
     )
     sub.add_argument(

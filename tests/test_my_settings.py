@@ -132,7 +132,7 @@ class TestSettingsFromEnv:
         assert s.llm_model is None
         assert s.openai_model == "gpt-4o"
         assert s.ollama_model == "mistral"
-        assert s.whisper_model_size == "small"
+        assert s.whisper_model_size == "large-v3-turbo"
         assert s.output_dir == Path("results")
         assert s.downloads_dir == Path("downloads")
         assert s.wrap_width == 80

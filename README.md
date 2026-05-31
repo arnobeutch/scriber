@@ -38,7 +38,7 @@ Flags shared by `transcribe` and `summarize`:
 | --- | --- |
 | `-l`, `--language` | `en` or `fr`. Default: autodetect. Used as a *hint* for caption-track selection and to force whisper's transcription language. The summary always tracks the source's language (English fallback for anything other than en/fr). |
 | `--diarize` | Identify speakers when transcribing local media (default: False). |
-| `--model-size` | Whisper model: `tiny`, `base`, `small`, `medium`, `large`. Default from `WHISPER_MODEL_SIZE` env or `small`. |
+| `--model-size` | Whisper model: `tiny`, `base`, `small`, `medium`, `large`, `large-v3`, `large-v3-turbo`. Default from `WHISPER_MODEL_SIZE` env or `large-v3-turbo` (best WER among CPU-practical models; faster than `medium` on the same hardware). Pick `small` for a speed-first draft; `medium` is functionally obsolete. |
 | `--output-dir` | Where outputs land. Default from `OUTPUT_DIR` env or `./results`. |
 | `--downloads-dir` | Where downloaded YT audio is cached. Default from `DOWNLOADS_DIR` env or `./downloads`. |
 | `--force` | Re-download audio and re-transcribe even when a cached `.wav` or transcript already exists. |
@@ -108,7 +108,7 @@ Runtime settings are loaded by `Settings.from_env()` (reads `.env` + `os.environ
 | `LLM_MODEL` | provider default | E.g. `gpt-4o`, `anthropic/claude-4.7-sonnet`, `mistral` (CLI flag overrides). |
 | `OPENAI_MODEL` | `gpt-4o` | Model for the OpenAI provider. |
 | `OLLAMA_MODEL` | `mistral` | Model for the local Ollama/RAG provider. |
-| `WHISPER_MODEL_SIZE` | `small` | `tiny`, `base`, `small`, `medium`, `large`. |
+| `WHISPER_MODEL_SIZE` | `large-v3-turbo` | `tiny`, `base`, `small`, `medium`, `large`, `large-v3`, `large-v3-turbo`. |
 | `OUTPUT_DIR` | `results` | Where transcripts and summaries land. |
 | `DOWNLOADS_DIR` | `downloads` | Where downloaded YT audio is cached. |
 | `WRAP_WIDTH` | `80` | Soft-wrap width for non-diarized transcripts (words are never split). |
