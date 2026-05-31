@@ -148,6 +148,11 @@ uv run pre-commit install
 
 `git commit` will then run ruff + pyright + pytest on staged Python files.
 
+## Further reading
+
+- [docs/DESIGN.md](docs/DESIGN.md) — internal architecture reference.
+- [docs/WHISPER_SETUP.md](docs/WHISPER_SETUP.md) — project-agnostic guide to tuning Whisper for transcription quality + CPU cost (model choice, audio pre-processing, params, engine choice). Lift it into other projects as-is.
+
 ## Roadmap
 
 Grooming backlog with completed items: [TODO.md](TODO.md).
