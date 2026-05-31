@@ -139,6 +139,7 @@ class TestTranscribeSubcommand:
         assert ns.dry_run is False
         assert ns.force is False
         assert ns.subtitles is False
+        assert ns.no_preprocess is False  # preprocessing is on by default
 
     def test_summarize_only_flags_rejected_under_transcribe(
         self,
@@ -171,6 +172,13 @@ class TestTranscribeSubcommand:
     def test_force_set(self, monkeypatch: pytest.MonkeyPatch) -> None:
         ns = _run_parser(["transcribe", "https://y.com/watch?v=x", "--force"], monkeypatch)
         assert ns.force is True
+
+    def test_no_preprocess_set(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        ns = _run_parser(
+            ["transcribe", "https://y.com/watch?v=x", "--no-preprocess"],
+            monkeypatch,
+        )
+        assert ns.no_preprocess is True
 
     def test_subtitles_set(self, monkeypatch: pytest.MonkeyPatch) -> None:
         ns = _run_parser(["transcribe", "https://y.com/watch?v=x", "--subtitles"], monkeypatch)

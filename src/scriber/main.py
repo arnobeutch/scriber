@@ -34,6 +34,9 @@ def _apply_cli_overrides(args: argparse.Namespace, base: Settings) -> Settings:
     provider = getattr(args, "llm_provider", None) or base.llm_provider
     if getattr(args, "with_openai", False):
         provider = "openai"
+    preprocess = base.preprocess_audio
+    if getattr(args, "no_preprocess", False):
+        preprocess = False
     return dataclasses.replace(
         base,
         output_dir=args.output_dir or base.output_dir,
@@ -42,6 +45,7 @@ def _apply_cli_overrides(args: argparse.Namespace, base: Settings) -> Settings:
         llm_provider=provider,
         llm_model=getattr(args, "llm_model", None) or base.llm_model,
         summary_mode=getattr(args, "summary_mode", None) or base.summary_mode,
+        preprocess_audio=preprocess,
     )
 
 

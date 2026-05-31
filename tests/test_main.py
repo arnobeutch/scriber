@@ -58,6 +58,7 @@ def _make_args(**overrides: object) -> MagicMock:
         "dry_run": False,
         "continue_on_error": False,
         "context_file": None,
+        "no_preprocess": False,
     }
     defaults.update(overrides)
     return MagicMock(**defaults)

@@ -15,6 +15,8 @@ from pyannote.core import Segment
 import scriber.transcription.local as plt
 from scriber.transcription.local import (
     _MODEL_CACHE,
+    _PREPROCESS_FILTER,
+    _maybe_preprocess,
     extract_audio,
     get_device,
     group_speaker_segments,
@@ -90,6 +92,30 @@ class TestExtractAudio:
     def test_missing_file_raises(self, tmp_path: Path) -> None:
         with pytest.raises(FileNotFoundError, match="File not found"):
             extract_audio(str(tmp_path / "nope.mp4"))
+
+
+class TestMaybePreprocess:
+    def test_disabled_returns_original_path_no_ownership(self) -> None:
+        with patch("scriber.transcription.local.preprocess_audio_file") as pre:
+            path, owns = _maybe_preprocess("/some/audio.wav", preprocess=False)
+        pre.assert_not_called()
+        assert path == "/some/audio.wav"
+        assert owns is False
+
+    def test_enabled_calls_filter_and_claims_ownership(self) -> None:
+        with patch(
+            "scriber.transcription.local.preprocess_audio_file",
+            return_value="/tmp/filtered.wav",
+        ) as pre:
+            path, owns = _maybe_preprocess("/some/audio.wav", preprocess=True)
+        pre.assert_called_once_with("/some/audio.wav")
+        assert path == "/tmp/filtered.wav"
+        assert owns is True
+
+    def test_filter_chain_is_the_one_recommended_by_bench(self) -> None:
+        # Locks the filter to the alimiter+dynaudnorm chain from the bench.
+        # If we ever change this, that change should be deliberate.
+        assert _PREPROCESS_FILTER == "alimiter=limit=0.95:level=disabled,dynaudnorm"
 
 
 class TestModelCache:

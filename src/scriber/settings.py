@@ -15,6 +15,14 @@ _DEFAULT_OLLAMA_MODEL = "mistral"
 _DEFAULT_LLM_PROVIDER = "openai"
 _DEFAULT_WRAP_WIDTH = 80
 _DEFAULT_SUMMARY_MODE = "auto"
+_DEFAULT_PREPROCESS_AUDIO = True
+
+
+def _bool_from_env(value: str | None, *, default: bool) -> bool:
+    """Parse common truthy/falsy strings; fall back to ``default``."""
+    if value is None:
+        return default
+    return value.strip().lower() in {"1", "true", "yes", "on", "y", "t"}
 
 
 def _load_dotenv(path: Path = Path(".env")) -> None:
@@ -53,6 +61,7 @@ class Settings:
     downloads_dir: Path = field(default_factory=lambda: Path("downloads"))
     wrap_width: int = _DEFAULT_WRAP_WIDTH
     summary_mode: str = _DEFAULT_SUMMARY_MODE
+    preprocess_audio: bool = _DEFAULT_PREPROCESS_AUDIO
 
     @classmethod
     def from_env(cls) -> Settings:
@@ -75,4 +84,8 @@ class Settings:
             downloads_dir=Path(os.environ.get("DOWNLOADS_DIR", "downloads")),
             wrap_width=int(os.environ.get("WRAP_WIDTH", str(_DEFAULT_WRAP_WIDTH))),
             summary_mode=os.environ.get("SUMMARY_MODE", _DEFAULT_SUMMARY_MODE),
+            preprocess_audio=_bool_from_env(
+                os.environ.get("PREPROCESS_AUDIO"),
+                default=_DEFAULT_PREPROCESS_AUDIO,
+            ),
         )

@@ -34,7 +34,7 @@ CLI tool to transcribe and summarize YouTube videos, local audio/video files, or
 | `src/scriber/settings.py` | Frozen `Settings` dataclass + stdlib `.env` loader (replaces the old `python-dotenv` dep). |
 | `src/scriber/transcription/youtube_captions.py` | yt-dlp-backed YouTube caption fetch. Picks manual > auto across `["fr", "en"]`. Raises `TranscriptUnavailableError` on failure. |
 | `src/scriber/transcription/youtube_audio.py` | yt-dlp-based audio download + video-id extraction + title metadata (used for the captionless-video fallback path). Smart-caches: returns existing `.wav` unless `force=True`. |
-| `src/scriber/transcription/local.py` | ffmpeg → whisper transcription, optional pyannote diarization. Module-level `_MODEL_CACHE` avoids reloading whisper across calls. `transcribe_audio_full` is the primary entry point (returns text + lang + segments). Module constants: `MIN_SEGMENT_DURATION`, `_MAX_SPEAKER_GAP`. |
+| `src/scriber/transcription/local.py` | ffmpeg → whisper transcription, optional pyannote diarization. Module-level `_MODEL_CACHE` avoids reloading whisper across calls. `transcribe_audio_full` is the primary entry point (returns text + lang + segments). Default audio pre-processing via `_maybe_preprocess` (alimiter+dynaudnorm; gated by `Settings.preprocess_audio`). Module constants: `MIN_SEGMENT_DURATION`, `_MAX_SPEAKER_GAP`, `_PREPROCESS_FILTER`. |
 | `src/scriber/transcription/preprocess.py` | Cleanup + speaker-name heuristics. |
 
 ## Dev workflow

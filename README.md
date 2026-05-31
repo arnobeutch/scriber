@@ -42,6 +42,7 @@ Flags shared by `transcribe` and `summarize`:
 | `--output-dir` | Where outputs land. Default from `OUTPUT_DIR` env or `./results`. |
 | `--downloads-dir` | Where downloaded YT audio is cached. Default from `DOWNLOADS_DIR` env or `./downloads`. |
 | `--force` | Re-download audio and re-transcribe even when a cached `.wav` or transcript already exists. |
+| `--no-preprocess` | Disable the default audio pre-processing chain (`alimiter=0.95 + dynaudnorm`). Use when the source is already cleaned. |
 | `--subtitles` | Also write `.srt` and `.vtt` subtitle files alongside the `.txt` transcript (whisper transcription only — YT captions and diarized output don't carry per-cue timestamps). |
 | `--dry-run` | Print what the pipeline would do (input type, model, output dir) without doing any work. |
 | `-d`, `--debug` | Enable DEBUG-level logging (default: False). |
@@ -112,6 +113,7 @@ Runtime settings are loaded by `Settings.from_env()` (reads `.env` + `os.environ
 | `OUTPUT_DIR` | `results` | Where transcripts and summaries land. |
 | `DOWNLOADS_DIR` | `downloads` | Where downloaded YT audio is cached. |
 | `WRAP_WIDTH` | `80` | Soft-wrap width for non-diarized transcripts (words are never split). |
+| `PREPROCESS_AUDIO` | `true` | Apply `alimiter=0.95,dynaudnorm` ffmpeg filter chain before whisper. `false`/`0`/`off` disables. CLI `--no-preprocess` also disables. |
 
 ## Logging
 

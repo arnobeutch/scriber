@@ -110,6 +110,18 @@ def _add_shared_args(sub: argparse.ArgumentParser) -> None:
         help="Re-download audio and re-transcribe even if cached outputs exist.",
     )
     sub.add_argument(
+        "--no-preprocess",
+        dest="no_preprocess",
+        action="store_true",
+        default=False,
+        help=(
+            "Disable the default audio pre-processing chain "
+            "(``alimiter=0.95 + dynaudnorm``). Use when the source audio is "
+            "already cleaned or when the filter is degrading quality on a "
+            "particular recording."
+        ),
+    )
+    sub.add_argument(
         "--subtitles",
         action="store_true",
         default=False,

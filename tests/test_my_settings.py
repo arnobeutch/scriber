@@ -137,6 +137,7 @@ class TestSettingsFromEnv:
         assert s.downloads_dir == Path("downloads")
         assert s.wrap_width == 80
         assert s.summary_mode == "auto"
+        assert s.preprocess_audio is True  # default: on
 
     def test_full_config_overrides(
         self,
@@ -156,6 +157,7 @@ class TestSettingsFromEnv:
         monkeypatch.setenv("DOWNLOADS_DIR", "dl")
         monkeypatch.setenv("WRAP_WIDTH", "100")
         monkeypatch.setenv("SUMMARY_MODE", "meeting")
+        monkeypatch.setenv("PREPROCESS_AUDIO", "false")
         s = Settings.from_env()
         assert s.openai_api_key == "sk-test"
         assert s.openrouter_api_key == "or-test"
@@ -169,6 +171,7 @@ class TestSettingsFromEnv:
         assert s.downloads_dir == Path("dl")
         assert s.wrap_width == 100
         assert s.summary_mode == "meeting"
+        assert s.preprocess_audio is False  # env override took effect
 
     def test_empty_string_env_treated_as_unset(
         self,

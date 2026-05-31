@@ -115,12 +115,14 @@ def _transcribe_url_via_whisper(
             str(audio_path),
             model_size=settings.whisper_model_size,
             language=requested_lang,
+            preprocess=settings.preprocess_audio,
         )
     else:
         transcribed_text, used_lang, segments = plt.transcribe_audio_full(
             str(audio_path),
             model_size=settings.whisper_model_size,
             language=requested_lang,
+            preprocess=settings.preprocess_audio,
         )
     summary_lang = derive_whisper_summary_language(used_lang, requested_lang)
     return Transcript(
@@ -168,6 +170,7 @@ def handle_media(args: argparse.Namespace, settings: Settings) -> Transcript:
             args.input_path,
             model_size=settings.whisper_model_size,
             language=requested_lang,
+            preprocess=settings.preprocess_audio,
         )
     else:
         # transcribe_video_file is a thin wrapper around transcribe_audio_full
@@ -179,6 +182,7 @@ def handle_media(args: argparse.Namespace, settings: Settings) -> Transcript:
                 audio_tmp,
                 model_size=settings.whisper_model_size,
                 language=requested_lang,
+                preprocess=settings.preprocess_audio,
             )
         finally:
             Path(audio_tmp).unlink()

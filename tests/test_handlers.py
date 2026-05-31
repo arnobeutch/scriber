@@ -181,6 +181,7 @@ class TestHandleUrl:
             str(tmp_path / "audio.wav"),
             model_size="small",
             language=None,
+            preprocess=True,
         )
 
     def test_diarize_flag_skips_captions_for_yt_urls(self, tmp_path: Path) -> None:
@@ -264,6 +265,7 @@ class TestHandleUrl:
             str(tmp_path / "audio.wav"),
             model_size="medium",
             language=None,
+            preprocess=True,
         )
 
     def test_fallback_forces_requested_language_to_whisper(
@@ -292,6 +294,7 @@ class TestHandleUrl:
             str(tmp_path / "audio.wav"),
             model_size="small",
             language="fr",
+            preprocess=True,
         )
         assert t.language == "fr"
 
@@ -328,7 +331,12 @@ class TestHandleMedia:
         assert t.language == "en"  # detected en → summary en
         assert t.title == "video"
         assert t.source == "whisper"
-        transcribe.assert_called_once_with(audio_tmp, model_size="small", language=None)
+        transcribe.assert_called_once_with(
+            audio_tmp,
+            model_size="small",
+            language=None,
+            preprocess=True,
+        )
 
     def test_explicit_language_forces_whisper(self, tmp_path: Path) -> None:
         s = _settings(output_dir=tmp_path / "out")
@@ -344,7 +352,12 @@ class TestHandleMedia:
             patch("scriber.handlers.Path.unlink"),
         ):
             t = handle_media(_args(input_path=str(media), language="fr"), s)
-        transcribe.assert_called_once_with(audio_tmp, model_size="small", language="fr")
+        transcribe.assert_called_once_with(
+            audio_tmp,
+            model_size="small",
+            language="fr",
+            preprocess=True,
+        )
         assert t.language == "fr"
 
     def test_detected_other_language_summary_in_english(self, tmp_path: Path) -> None:
