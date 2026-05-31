@@ -160,6 +160,11 @@ def transcribe_audio_full(
             fp16=(device == "cuda"),
             language=used_lang,
             verbose=False,  # enables whisper's tqdm progress bar
+            # Don't let prior segments bias the next decode. Whisper's
+            # default (True) cascades hallucinations on long files — once
+            # a wrong phrase enters context, the next segment is biased
+            # toward it and the error compounds. See docs/WHISPER_SETUP.md.
+            condition_on_previous_text=False,
         )
         segments = cast(list[dict[str, Any]], result.get("segments", []))
         return cast(str, result["text"]), used_lang, segments
