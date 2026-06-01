@@ -7,12 +7,13 @@ import dataclasses
 import shutil
 import sys
 from dataclasses import dataclass
+from pathlib import Path
 
 import torch.cuda
 
 from scriber import handlers, parser
 from scriber.logger import initialize_logger, my_logger
-from scriber.settings import Settings
+from scriber.settings import Settings, load_text_file
 from scriber.summarizers import MissingAPIKeyError, make_summarizer
 
 
@@ -37,6 +38,17 @@ def _apply_cli_overrides(args: argparse.Namespace, base: Settings) -> Settings:
     preprocess = base.preprocess_audio
     if getattr(args, "no_preprocess", False):
         preprocess = False
+    initial_prompt = base.initial_prompt
+    cli_prompt_path = getattr(args, "initial_prompt_file", None)
+    if cli_prompt_path is not None:
+        loaded = load_text_file(cli_prompt_path)
+        if loaded is None:
+            my_logger.warning(
+                f"--initial-prompt-file {cli_prompt_path!s} not found or empty; "
+                "proceeding without a primer.",
+            )
+        else:
+            initial_prompt = loaded
     return dataclasses.replace(
         base,
         output_dir=args.output_dir or base.output_dir,
@@ -46,7 +58,52 @@ def _apply_cli_overrides(args: argparse.Namespace, base: Settings) -> Settings:
         llm_model=getattr(args, "llm_model", None) or base.llm_model,
         summary_mode=getattr(args, "summary_mode", None) or base.summary_mode,
         preprocess_audio=preprocess,
+        initial_prompt=initial_prompt,
     )
+
+
+def _maybe_prompt_for_initial_prompt(
+    args: argparse.Namespace,
+    settings: Settings,
+) -> Settings:
+    """Interactively offer a primer file when none was provided.
+
+    Skipped when:
+      - a primer is already loaded (CLI flag or env var)
+      - ``--dry-run`` is set
+      - stdin is not a TTY (scripts / pipes / CI)
+      - none of the inputs would route to whisper (text-only batch)
+    """
+    if settings.initial_prompt is not None:
+        return settings
+    if args.dry_run:
+        return settings
+    if not sys.stdin.isatty():
+        return settings
+    needs_whisper = any(
+        parser.classify_input(p)["is_url"] or parser.classify_input(p)["is_media_file"]
+        for p in args.input_path
+    )
+    if not needs_whisper:
+        return settings
+
+    sys.stderr.write(
+        "\nNo --initial-prompt-file given. A primer file is a short text "
+        "(in the audio's language) listing proper nouns, acronyms, and "
+        "jargon you expect in the recording — it can substantially improve "
+        "transcription of brand-name-dense content.\n"
+        "See docs/WHISPER_SETUP.md for what to put in it.\n\n",
+    )
+    answer = input("Enter primer file path, or press Enter to skip: ").strip()
+    if not answer:
+        return settings
+    loaded = load_text_file(Path(answer))
+    if loaded is None:
+        my_logger.warning(
+            f"Primer file {answer!r} not found or empty; proceeding without.",
+        )
+        return settings
+    return dataclasses.replace(settings, initial_prompt=loaded)
 
 
 def _gpu_warning() -> None:
@@ -129,6 +186,7 @@ def main() -> None:
     args = parser.parse_args()
     initialize_logger(args)
     settings = _apply_cli_overrides(args, Settings.from_env())
+    settings = _maybe_prompt_for_initial_prompt(args, settings)
 
     my_logger.info(f"Script called with the following arguments: {vars(args)}")
     my_logger.debug(f"Loaded settings: {settings}")

@@ -25,6 +25,20 @@ def _bool_from_env(value: str | None, *, default: bool) -> bool:
     return value.strip().lower() in {"1", "true", "yes", "on", "y", "t"}
 
 
+def load_text_file(path: Path | None) -> str | None:
+    """Read a small text file, strip whitespace, return None when missing/empty.
+
+    Shared by ``INITIAL_PROMPT_FILE`` env loading and the CLI / interactive
+    paths in ``main`` — the rest of the code only ever sees the resolved
+    string content, never a file path.
+    """
+    if path is None:
+        return None
+    if not path.is_file():
+        return None
+    return path.read_text(encoding="utf-8").strip() or None
+
+
 def _load_dotenv(path: Path = Path(".env")) -> None:
     """Populate os.environ from a .env file (KEY=value per line). Existing vars win."""
     if not path.exists():
@@ -62,6 +76,11 @@ class Settings:
     wrap_width: int = _DEFAULT_WRAP_WIDTH
     summary_mode: str = _DEFAULT_SUMMARY_MODE
     preprocess_audio: bool = _DEFAULT_PREPROCESS_AUDIO
+    initial_prompt: str | None = None
+    """Resolved primer text (vocabulary hint for whisper). Loaded from the
+    ``INITIAL_PROMPT_FILE`` env var, the ``--initial-prompt-file`` CLI flag,
+    or an interactive prompt — all three reduce to the loaded *content*,
+    not the path. See docs/WHISPER_SETUP.md for what to put in it."""
 
     @classmethod
     def from_env(cls) -> Settings:
@@ -87,5 +106,8 @@ class Settings:
             preprocess_audio=_bool_from_env(
                 os.environ.get("PREPROCESS_AUDIO"),
                 default=_DEFAULT_PREPROCESS_AUDIO,
+            ),
+            initial_prompt=load_text_file(
+                Path(p) if (p := os.environ.get("INITIAL_PROMPT_FILE")) else None,
             ),
         )

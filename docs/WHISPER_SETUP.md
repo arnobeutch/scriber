@@ -246,6 +246,27 @@ photovoltaïque, pompe à chaleur, VMC Zehnder, domotique ZigBee MQTT
 Matter Thread, visiophone, garde-corps, contremarche.
 ```
 
+**Recurring-meeting workflow:**
+
+1. **Listen to ~5 minutes** of a typical recording from this series; note
+   every proper noun + jargon term you hear.
+2. **Compose the primer once.** Stash it alongside the project's other
+   docs (e.g. inside your Obsidian vault, your Notion workspace, or a
+   plain `~/primers/` folder). Use a descriptive filename:
+   `whisper_primer_<project>.<lang>.txt`.
+3. **Validate** by running a 5-min sample with vs without the primer;
+   eyeball that the new words appear correctly.
+4. **Reuse** on every subsequent meeting of the same series. Most
+   transcription tools accept either a CLI flag (`--initial-prompt-file
+   PATH`) or an env var (`INITIAL_PROMPT_FILE=PATH`).
+5. **When the project evolves** (new contractor, new product, new
+   acronym): edit the primer. Five-minute task.
+
+**Maintenance cost is real but bounded** — 15 minutes once, then 1-2
+minutes of edit per quarter. The output transcript becomes
+proper-noun-clean, which materially improves downstream summarization,
+search, and reviewability.
+
 ### Skip these unless you have a reason
 
 - `beam_size`, `patience`, `length_penalty` — second-order. Defaults are

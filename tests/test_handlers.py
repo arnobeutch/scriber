@@ -182,6 +182,7 @@ class TestHandleUrl:
             model_size="small",
             language=None,
             preprocess=True,
+            initial_prompt=None,
         )
 
     def test_diarize_flag_skips_captions_for_yt_urls(self, tmp_path: Path) -> None:
@@ -266,6 +267,7 @@ class TestHandleUrl:
             model_size="medium",
             language=None,
             preprocess=True,
+            initial_prompt=None,
         )
 
     def test_fallback_forces_requested_language_to_whisper(
@@ -295,6 +297,7 @@ class TestHandleUrl:
             model_size="small",
             language="fr",
             preprocess=True,
+            initial_prompt=None,
         )
         assert t.language == "fr"
 
@@ -336,6 +339,7 @@ class TestHandleMedia:
             model_size="small",
             language=None,
             preprocess=True,
+            initial_prompt=None,
         )
 
     def test_explicit_language_forces_whisper(self, tmp_path: Path) -> None:
@@ -357,6 +361,7 @@ class TestHandleMedia:
             model_size="small",
             language="fr",
             preprocess=True,
+            initial_prompt=None,
         )
         assert t.language == "fr"
 

@@ -122,6 +122,21 @@ def _add_shared_args(sub: argparse.ArgumentParser) -> None:
         ),
     )
     sub.add_argument(
+        "--initial-prompt-file",
+        dest="initial_prompt_file",
+        type=Path,
+        default=None,
+        help=(
+            "Path to a short text file (in the audio's language) listing "
+            "proper nouns, acronyms, and jargon you expect in the audio. "
+            "Whisper uses it as decoder context — biases token probabilities "
+            "toward your vocabulary. See docs/WHISPER_SETUP.md for what to "
+            "put in it. If omitted on an interactive run, scriber asks "
+            "before proceeding without one. Default: env INITIAL_PROMPT_FILE, "
+            "or none."
+        ),
+    )
+    sub.add_argument(
         "--subtitles",
         action="store_true",
         default=False,

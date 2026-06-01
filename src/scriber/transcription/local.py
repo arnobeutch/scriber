@@ -132,13 +132,16 @@ def transcribe_audio_full(
     language: str | None = None,
     *,
     preprocess: bool = True,
+    initial_prompt: str | None = None,
 ) -> tuple[str, str, list[dict[str, Any]]]:
     """Transcribe + return ``(text, language, segments)``.
 
     ``segments`` is whisper's per-cue list with ``start`` / ``end`` /
     ``text`` keys, suitable for SRT / VTT export. ``preprocess`` runs the
     default ffmpeg filter chain (``alimiter + dynaudnorm``) before
-    transcription unless disabled.
+    transcription unless disabled. ``initial_prompt`` seeds whisper's
+    decoder with a primer text (proper nouns, acronyms, jargon) — see
+    docs/WHISPER_SETUP.md.
     """
     my_logger.info(f"Transcribing audio file: {audio_file}")
     audio_file, owns_temp = _maybe_preprocess(audio_file, preprocess=preprocess)
@@ -165,6 +168,7 @@ def transcribe_audio_full(
             # a wrong phrase enters context, the next segment is biased
             # toward it and the error compounds. See docs/WHISPER_SETUP.md.
             condition_on_previous_text=False,
+            initial_prompt=initial_prompt,
         )
         segments = cast(list[dict[str, Any]], result.get("segments", []))
         return cast(str, result["text"]), used_lang, segments
@@ -276,13 +280,16 @@ def transcribe_audio_with_diarization(
     language: str | None = None,
     *,
     preprocess: bool = True,
+    initial_prompt: str | None = None,
 ) -> tuple[str, str]:
     """Transcribe audio with speaker diarization.
 
     ``language=None`` autodetects (default behavior); pass a code (e.g.
     ``"fr"``) to force whisper to that language. ``preprocess`` runs the
     default ffmpeg filter chain (``alimiter + dynaudnorm``) before both
-    diarization and transcription unless disabled.
+    diarization and transcription unless disabled. ``initial_prompt``
+    seeds whisper's decoder with a vocabulary primer; applied to every
+    per-speaker slice.
     """
     audio_file, owns_temp = _maybe_preprocess(audio_file, preprocess=preprocess)
     try:
@@ -326,6 +333,7 @@ def transcribe_audio_with_diarization(
                 sliced_audio,
                 fp16=(device == "cuda"),
                 language=used_lang,
+                initial_prompt=initial_prompt,
             )
             text = cast(str, segment_result["text"]).strip()
             if not text:  # Skip empty transcriptions
@@ -344,6 +352,7 @@ def transcribe_video_file_with_diarization(
     language: str | None = None,
     *,
     preprocess: bool = True,
+    initial_prompt: str | None = None,
 ) -> tuple[str, str]:
     """Full pipeline: Extract audio from video, transcribe it with diarization."""
     my_logger.info(f"Processing with diarization: {video_file}")
@@ -354,6 +363,7 @@ def transcribe_video_file_with_diarization(
             model_size=model_size,
             language=language,
             preprocess=preprocess,
+            initial_prompt=initial_prompt,
         )
     finally:
         Path(audio_path).unlink()

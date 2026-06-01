@@ -180,6 +180,28 @@ class TestTranscribeSubcommand:
         )
         assert ns.no_preprocess is True
 
+    def test_initial_prompt_file_default_none(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        ns = _run_parser(["transcribe", "https://y.com/watch?v=x"], monkeypatch)
+        assert ns.initial_prompt_file is None
+
+    def test_initial_prompt_file_accepted(
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        primer = tmp_path / "primer.fr.txt"
+        primer.write_text("test", encoding="utf-8")
+        ns = _run_parser(
+            [
+                "transcribe",
+                "https://y.com/watch?v=x",
+                "--initial-prompt-file",
+                str(primer),
+            ],
+            monkeypatch,
+        )
+        assert ns.initial_prompt_file == primer
+
     def test_subtitles_set(self, monkeypatch: pytest.MonkeyPatch) -> None:
         ns = _run_parser(["transcribe", "https://y.com/watch?v=x", "--subtitles"], monkeypatch)
         assert ns.subtitles is True

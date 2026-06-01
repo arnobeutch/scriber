@@ -8,7 +8,35 @@ from pathlib import Path
 import pytest
 
 import scriber.settings as my_settings
-from scriber.settings import Settings
+from scriber.settings import Settings, load_text_file
+
+
+class TestLoadTextFile:
+    def test_none_path_returns_none(self) -> None:
+        assert load_text_file(None) is None
+
+    def test_missing_file_returns_none(self, tmp_path: Path) -> None:
+        assert load_text_file(tmp_path / "nope.txt") is None
+
+    def test_empty_file_returns_none(self, tmp_path: Path) -> None:
+        p = tmp_path / "empty.txt"
+        p.write_text("", encoding="utf-8")
+        assert load_text_file(p) is None
+
+    def test_whitespace_only_returns_none(self, tmp_path: Path) -> None:
+        p = tmp_path / "ws.txt"
+        p.write_text("   \n\n\t  ", encoding="utf-8")
+        assert load_text_file(p) is None
+
+    def test_strips_surrounding_whitespace(self, tmp_path: Path) -> None:
+        p = tmp_path / "ok.txt"
+        p.write_text("\n\n  hello world  \n", encoding="utf-8")
+        assert load_text_file(p) == "hello world"
+
+    def test_utf8_unicode_preserved(self, tmp_path: Path) -> None:
+        p = tmp_path / "fr.txt"
+        p.write_text("Réunion : K•LINE, Wienerberger.", encoding="utf-8")
+        assert load_text_file(p) == "Réunion : K•LINE, Wienerberger."
 
 
 class TestLoadDotenv:
@@ -138,6 +166,7 @@ class TestSettingsFromEnv:
         assert s.wrap_width == 80
         assert s.summary_mode == "auto"
         assert s.preprocess_audio is True  # default: on
+        assert s.initial_prompt is None  # no env var, no .env, no CLI
 
     def test_full_config_overrides(
         self,
@@ -158,6 +187,9 @@ class TestSettingsFromEnv:
         monkeypatch.setenv("WRAP_WIDTH", "100")
         monkeypatch.setenv("SUMMARY_MODE", "meeting")
         monkeypatch.setenv("PREPROCESS_AUDIO", "false")
+        primer = tmp_path / "primer.txt"
+        primer.write_text("Christophe, Anne, K•LINE, RAL 7021.", encoding="utf-8")
+        monkeypatch.setenv("INITIAL_PROMPT_FILE", str(primer))
         s = Settings.from_env()
         assert s.openai_api_key == "sk-test"
         assert s.openrouter_api_key == "or-test"
@@ -172,6 +204,7 @@ class TestSettingsFromEnv:
         assert s.wrap_width == 100
         assert s.summary_mode == "meeting"
         assert s.preprocess_audio is False  # env override took effect
+        assert s.initial_prompt == "Christophe, Anne, K•LINE, RAL 7021."
 
     def test_empty_string_env_treated_as_unset(
         self,

@@ -13,7 +13,8 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from scriber.main import main
+from scriber.main import _maybe_prompt_for_initial_prompt, main
+from scriber.settings import Settings
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -59,6 +60,7 @@ def _make_args(**overrides: object) -> MagicMock:
         "continue_on_error": False,
         "context_file": None,
         "no_preprocess": False,
+        "initial_prompt_file": None,
     }
     defaults.update(overrides)
     return MagicMock(**defaults)
@@ -271,3 +273,97 @@ class TestDispatcher:
         # Both inputs attempted; non-zero exit because one failed.
         assert h_url.call_count == 2
         assert excinfo.value.code == 1
+
+
+def _bare_settings() -> Settings:
+    """Minimal Settings for prompt-helper tests (no env, no file IO)."""
+    return Settings(initial_prompt=None)
+
+
+class TestMaybePromptForInitialPrompt:
+    def test_skipped_when_primer_already_loaded(self) -> None:
+        s = _bare_settings()
+        s = Settings(initial_prompt="already set")
+        with patch("scriber.main.sys.stdin.isatty", return_value=True):
+            out = _maybe_prompt_for_initial_prompt(
+                _make_args(input_path=[_URL]),
+                s,
+            )
+        assert out.initial_prompt == "already set"
+
+    def test_skipped_when_dry_run(self) -> None:
+        with patch("scriber.main.sys.stdin.isatty", return_value=True):
+            out = _maybe_prompt_for_initial_prompt(
+                _make_args(input_path=[_URL], dry_run=True),
+                _bare_settings(),
+            )
+        assert out.initial_prompt is None
+
+    def test_skipped_when_stdin_not_tty(self) -> None:
+        with patch("scriber.main.sys.stdin.isatty", return_value=False):
+            out = _maybe_prompt_for_initial_prompt(
+                _make_args(input_path=[_URL]),
+                _bare_settings(),
+            )
+        assert out.initial_prompt is None
+
+    def test_skipped_when_only_text_inputs(
+        self,
+        tmp_path: Path,
+    ) -> None:
+        txt = tmp_path / "doc.txt"
+        txt.write_text("hello", encoding="utf-8")
+        with (
+            patch("scriber.main.sys.stdin.isatty", return_value=True),
+            patch("scriber.main.input") as ip,
+        ):
+            out = _maybe_prompt_for_initial_prompt(
+                _make_args(input_path=[str(txt)]),
+                _bare_settings(),
+            )
+        ip.assert_not_called()
+        assert out.initial_prompt is None
+
+    def test_empty_answer_proceeds_without_primer(self, tmp_path: Path) -> None:
+        media = tmp_path / "clip.mp4"
+        media.write_text("")
+        with (
+            patch("scriber.main.sys.stdin.isatty", return_value=True),
+            patch("scriber.main.input", return_value="   "),
+            patch("scriber.main.sys.stderr"),
+        ):
+            out = _maybe_prompt_for_initial_prompt(
+                _make_args(input_path=[str(media)]),
+                _bare_settings(),
+            )
+        assert out.initial_prompt is None
+
+    def test_valid_path_loads_primer(self, tmp_path: Path) -> None:
+        media = tmp_path / "clip.mp4"
+        media.write_text("")
+        primer = tmp_path / "primer.fr.txt"
+        primer.write_text("Christophe, Anne, K•LINE.", encoding="utf-8")
+        with (
+            patch("scriber.main.sys.stdin.isatty", return_value=True),
+            patch("scriber.main.input", return_value=str(primer)),
+            patch("scriber.main.sys.stderr"),
+        ):
+            out = _maybe_prompt_for_initial_prompt(
+                _make_args(input_path=[str(media)]),
+                _bare_settings(),
+            )
+        assert out.initial_prompt == "Christophe, Anne, K•LINE."
+
+    def test_bogus_path_warns_and_proceeds(self, tmp_path: Path) -> None:
+        media = tmp_path / "clip.mp4"
+        media.write_text("")
+        with (
+            patch("scriber.main.sys.stdin.isatty", return_value=True),
+            patch("scriber.main.input", return_value="/nonexistent/primer.txt"),
+            patch("scriber.main.sys.stderr"),
+        ):
+            out = _maybe_prompt_for_initial_prompt(
+                _make_args(input_path=[str(media)]),
+                _bare_settings(),
+            )
+        assert out.initial_prompt is None
