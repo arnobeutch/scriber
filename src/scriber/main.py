@@ -14,7 +14,6 @@ import torch.cuda
 from scriber import handlers, parser
 from scriber.logger import initialize_logger, my_logger
 from scriber.settings import Settings, load_text_file
-from scriber.summarizers import MissingAPIKeyError, make_summarizer
 
 
 @dataclass(frozen=True)
@@ -181,6 +180,24 @@ def _print_batch_summary(results: list[_InputResult]) -> None:
         my_logger.info(f"  {mark} {r.path}  —  {r.detail}")
 
 
+def _preflight_summarizer(settings: Settings) -> None:
+    """Fail fast if the summarize extra is absent or the LLM API key is missing."""
+    try:
+        from scriber.summarizers import MissingAPIKeyError, make_summarizer
+    except ImportError:
+        my_logger.error(
+            "Summarization requires the 'summarize' extra. Install it with:\n"
+            "  uv sync --extra summarize             (in the scriber repo)\n"
+            "  uv tool install 'scriber[summarize]'  (as a standalone tool)",
+        )
+        sys.exit(2)
+    try:
+        make_summarizer(settings)
+    except MissingAPIKeyError as exc:
+        my_logger.error(str(exc))
+        sys.exit(2)
+
+
 def main() -> None:
     """Parse args, build a Transcript for each input, write it, and optionally summarize."""
     args = parser.parse_args()
@@ -198,11 +215,7 @@ def main() -> None:
     # Preflight the LLM backend BEFORE the slow transcription pipeline so a
     # missing API key fails in seconds, not after a 10-minute whisper run.
     if will_summarize and not args.dry_run:
-        try:
-            make_summarizer(settings)
-        except MissingAPIKeyError as exc:
-            my_logger.error(str(exc))
-            sys.exit(2)
+        _preflight_summarizer(settings)
 
     results: list[_InputResult] = []
     for path in args.input_path:

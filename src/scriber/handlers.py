@@ -25,11 +25,23 @@ from scriber.logger import my_logger
 from scriber.model import SourceMetadata, Transcript
 from scriber.settings import Settings
 from scriber.subtitles import write_srt, write_vtt
-from scriber.summarizers import make_summarizer
 from scriber.transcription import local as plt
 from scriber.transcription import youtube_audio as pya
 from scriber.transcription import youtube_captions as pytt
 from scriber.transcription.youtube_captions import TranscriptUnavailableError
+
+# Optional-extra hints — raised when an opt-in dependency group isn't installed.
+_DIARIZE_EXTRA_HINT = (
+    "Speaker diarization (--diarize) requires the 'diarize' extra. Install it with:\n"
+    "  uv sync --extra diarize               (in the scriber repo)\n"
+    "  uv tool install 'scriber[diarize]'    (as a standalone tool)\n"
+    "and set HUGGINGFACE_TOKEN for the gated pyannote models."
+)
+_SUMMARIZE_EXTRA_HINT = (
+    "Summarization requires the 'summarize' extra. Install it with:\n"
+    "  uv sync --extra summarize             (in the scriber repo)\n"
+    "  uv tool install 'scriber[summarize]'  (as a standalone tool)"
+)
 
 
 def handle_url(args: argparse.Namespace, settings: Settings) -> Transcript:
@@ -111,7 +123,11 @@ def _transcribe_url_via_whisper(
 
     segments: list[dict[str, object]] = []
     if args.diarize:
-        transcribed_text, used_lang = plt.transcribe_audio_with_diarization(
+        try:
+            from scriber.transcription.diarize import transcribe_audio_with_diarization
+        except ImportError as exc:
+            raise RuntimeError(_DIARIZE_EXTRA_HINT) from exc
+        transcribed_text, used_lang = transcribe_audio_with_diarization(
             str(audio_path),
             model_size=settings.whisper_model_size,
             language=requested_lang,
@@ -168,7 +184,11 @@ def handle_media(args: argparse.Namespace, settings: Settings) -> Transcript:
     requested_lang: str | None = args.language
     segments: list[dict[str, object]] = []
     if args.diarize:
-        text, used_lang = plt.transcribe_video_file_with_diarization(
+        try:
+            from scriber.transcription.diarize import transcribe_video_file_with_diarization
+        except ImportError as exc:
+            raise RuntimeError(_DIARIZE_EXTRA_HINT) from exc
+        text, used_lang = transcribe_video_file_with_diarization(
             args.input_path,
             model_size=settings.whisper_model_size,
             language=requested_lang,
@@ -269,6 +289,10 @@ def write_transcript_file(
 
 def summarize(transcript: Transcript, args: argparse.Namespace, settings: Settings) -> None:
     """Dispatch to the configured Summarizer backend."""
+    try:
+        from scriber.summarizers import make_summarizer
+    except ImportError as exc:
+        raise RuntimeError(_SUMMARIZE_EXTRA_HINT) from exc
     summarizer = make_summarizer(settings)
     context = _load_context_file(getattr(args, "context_file", None))
     summarizer.summarize(transcript, input_path=args.input_path, context=context)

@@ -20,8 +20,8 @@ CLI tool to transcribe and summarize YouTube videos, local audio/video files, or
 
 | File | Purpose |
 | --- | --- |
-| `src/scriber/main.py` | Entry point. Parses args, initializes logger, loads settings, loops over `args.input_path` (one or more), dispatches per-path to the right handler, and runs the summarizer when `args.command == "summarize"`. Also: preflight LLM key check, GPU warning, `--dry-run` report. |
-| `src/scriber/handlers.py` | `handle_url` / `handle_media` / `handle_text` + `write_transcript_file(subtitles=bool)` + `summarize`. The actual orchestration. |
+| `src/scriber/main.py` | Entry point. Parses args, initializes logger, loads settings, loops over `args.input_path` (one or more), dispatches per-path to the right handler, and runs the summarizer when `args.command == "summarize"`. Also: preflight LLM key check (`_preflight_summarizer`, which **lazily** imports `scriber.summarizers` so the base install needn't have the `summarize` extra), GPU warning, `--dry-run` report. |
+| `src/scriber/handlers.py` | `handle_url` / `handle_media` / `handle_text` + `write_transcript_file(subtitles=bool)` + `summarize`. The actual orchestration. The `summarize` path and the two `--diarize` branches **lazily** import `scriber.summarizers` / `scriber.transcription.diarize` and raise `_SUMMARIZE_EXTRA_HINT` / `_DIARIZE_EXTRA_HINT` on `ImportError` (so the base install runs transcription without either extra). |
 | `src/scriber/model.py` | Shared dataclasses (currently just `Transcript`) — kept import-cycle-free. |
 | `src/scriber/formatting.py` | `sanitize_filename`, `wrap_transcript` — text helpers shared by handlers. |
 | `src/scriber/language.py` | `derive_summary_language` + `derive_whisper_summary_language`. Pure functions implementing the language-selection ladder (see README). |
@@ -34,13 +34,15 @@ CLI tool to transcribe and summarize YouTube videos, local audio/video files, or
 | `src/scriber/settings.py` | Frozen `Settings` dataclass + stdlib `.env` loader (replaces the old `python-dotenv` dep). |
 | `src/scriber/transcription/youtube_captions.py` | yt-dlp-backed YouTube caption fetch. Picks manual > auto across `["fr", "en"]`. Raises `TranscriptUnavailableError` on failure. |
 | `src/scriber/transcription/youtube_audio.py` | yt-dlp-based audio download + video-id extraction + title metadata (used for the captionless-video fallback path). Smart-caches: returns existing `.wav` unless `force=True`. |
-| `src/scriber/transcription/local.py` | ffmpeg → whisper transcription, optional pyannote diarization. Module-level `_MODEL_CACHE` avoids reloading whisper across calls. `transcribe_audio_full` is the primary entry point (returns text + lang + segments). Default audio pre-processing via `_maybe_preprocess` (alimiter+dynaudnorm; gated by `Settings.preprocess_audio`). Module constants: `MIN_SEGMENT_DURATION`, `_MAX_SPEAKER_GAP`, `_PREPROCESS_FILTER`. |
+| `src/scriber/transcription/local.py` | ffmpeg → whisper transcription (whisper engine only; **no** pyannote/torchaudio imports). Module-level `_MODEL_CACHE` avoids reloading whisper across calls. `transcribe_audio_full` is the primary entry point (returns text + lang + segments). Default audio pre-processing via `maybe_preprocess` (alimiter+dynaudnorm; gated by `Settings.preprocess_audio`). Shared engine helpers (`get_device`, `load_model`, `detect_language`, `patch_whisper_progress_bar`, `maybe_preprocess`, `extract_audio`) are imported by `diarize.py`. Module constant: `_PREPROCESS_FILTER`. |
+| `src/scriber/transcription/diarize.py` | Speaker-diarization path (pyannote + torchaudio) — the `diarize` extra. `diarize_speakers`, `detect_speech_segments`, `group_speaker_segments`, `load_audio_slice`, `transcribe_audio_with_diarization`, `transcribe_video_file_with_diarization`. Module constants `MIN_SEGMENT_DURATION` / `_MAX_SPEAKER_GAP`. Imported lazily by `handlers.py` so the base install never pulls pyannote/torchaudio. |
 | `src/scriber/transcription/preprocess.py` | Cleanup + speaker-name heuristics. |
 
 ## Dev workflow
 
 - `uv add`, `uv run`, `uv sync` — never `pip`/`venv` directly.
-- `just lint`, `just typecheck`, `just test`, `just all`.
+- **Packaging**: base = transcription-only; `diarize` + `summarize` are optional extras (`[project.optional-dependencies]`). torch is **not** CPU-pinned (scriber stays GPU-capable; lean CPU consumers select the backend at install time — see `docs/BDCOS_INSTALL.md`). Dev env needs all extras: `just sync` (= `uv sync --all-extras`); the `just` recipes run with `--all-extras`.
+- `just sync`, `just lint`, `just typecheck`, `just test`, `just all`.
 - `pre-commit` runs ruff + pyright + pytest on `git commit` once installed (`uv run pre-commit install`).
 - `pytest -m integration` runs opt-in ML tests (whisper / pyannote). They need a fixture at `tests/integration/data/hello.wav` (see the test module's docstring) and download whisper models on first run. Skipped by default.
 - Do not auto-commit.
@@ -48,7 +50,8 @@ CLI tool to transcribe and summarize YouTube videos, local audio/video files, or
 
 ## Known state
 
-- **App modules + tests are ruff-ALL + pyright-strict clean.** `just all` runs green (271 tests, 2 deselected integration). Boundary with untyped ML deps (`whisper`, `pyannote`, `torchaudio`, `ffmpeg`, `yt-dlp`, `langchain`, `chromadb`) is handled via file-level `# pyright: reportUnknown... = false` headers in `src/scriber/transcription/local.py` and `src/scriber/transcription/youtube_audio.py`, and explicit `cast(Any, ...)` at call sites elsewhere. Apply `.claude/rules/python_strict.md` patterns when extending.
+- **App modules + tests are ruff-ALL + pyright-strict clean.** `just all` runs green. Boundary with untyped ML deps (`whisper`, `pyannote`, `torchaudio`, `ffmpeg`, `yt-dlp`, `langchain`, `chromadb`) is handled via file-level `# pyright: reportUnknown... = false` headers in `src/scriber/transcription/local.py`, `src/scriber/transcription/diarize.py`, and `src/scriber/transcription/youtube_audio.py`, and explicit `cast(Any, ...)` at call sites elsewhere. Apply `.claude/rules/python_strict.md` patterns when extending.
+- `tests/test_base_install_imports.py` is the **packaging guard**: it blocks the optional-extra deps at import time and asserts the transcribe path still imports — it fails if an eager `pyannote`/`torchaudio`/`langchain`/`openai`/`chromadb`/`textblob` import sneaks onto the base path.
 - `results/`, `downloads/`, and `chroma_db/` are runtime outputs (gitignored).
 - `.env` holds `OPENAI_API_KEY`, optionally `HUGGINGFACE_TOKEN` (for diarization), and any `LOG_LEVEL` override.
 - Improvement plan lives at `/home/mprz/.claude/plans/ok-now-that-we-inherited-pascal.md`. In-flight work is tracked there; `TODO.md` is the grooming backlog.

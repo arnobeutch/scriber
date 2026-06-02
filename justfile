@@ -1,18 +1,24 @@
 default:
     @just --list
 
+# Sync the dev environment with all optional extras (diarize + summarize).
+# The package ships transcription-only by default; contributors run the full
+# suite, so the dev env always carries every extra.
+sync:
+    uv sync --all-extras
+
 lint:
-    uv run ruff check .
-    uv run ruff format --check .
+    uv run --all-extras ruff check .
+    uv run --all-extras ruff format --check .
 
 format:
-    uv run ruff format .
-    uv run ruff check --fix .
+    uv run --all-extras ruff format .
+    uv run --all-extras ruff check --fix .
 
 typecheck:
-    uv run pyright
+    uv run --all-extras pyright
 
 test:
-    uv run pytest
+    uv run --all-extras pytest
 
 all: lint typecheck test

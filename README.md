@@ -6,10 +6,32 @@ Transcribe and summarize YouTube videos, local audio/video files, or existing te
 
 - `yt-dlp` for both YouTube captions (en / fr; manual preferred over auto) and audio download for the captionless-video fallback.
 - `whisper` transcription for local media (`ffmpeg-python` for audio extraction).
-- Optional speaker diarization via `pyannote-audio`.
-- `textblob` sentiment/polarity (applied to every summary, regardless of backend).
+- Optional speaker diarization via `pyannote-audio` — the **`diarize` extra**.
+- `textblob` sentiment/polarity + LLM summarization — the **`summarize` extra**.
 - Pluggable LLM backends: **OpenAI** (default), **OpenRouter** (Minimax, Kimi, Claude, Gemini, …), **Ollama** (local RAG via `langchain` + `langchain-ollama` + `chromadb`).
 - Markdown-formatted summary output.
+
+## Install
+
+The base package is **transcription-only** (whisper + ffmpeg + yt-dlp).
+Diarization and summarization are opt-in extras, so a plain install stays lean:
+
+```bash
+uv sync                                  # transcription-only base
+uv sync --extra diarize                  # + speaker diarization (needs HUGGINGFACE_TOKEN)
+uv sync --extra summarize                # + LLM summarization backends
+uv sync --all-extras                     # everything (the full experience)
+```
+
+Working in this repo? Use `just sync` (= `uv sync --all-extras`) — the dev
+recipes (`just lint/typecheck/test/all`) all run against the full environment.
+
+Requesting a feature whose extra isn't installed (e.g. `--diarize`, or the
+`summarize` subcommand) fails with a message telling you which extra to add.
+
+scriber stays **GPU-capable by default** (torch is not pinned to a CPU index).
+For a lean, CPU-only transcription deployment — e.g. installing scriber as a
+standalone `uv tool` — see [docs/BDCOS_INSTALL.md](docs/BDCOS_INSTALL.md).
 
 ## Usage
 

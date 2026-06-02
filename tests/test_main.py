@@ -158,7 +158,7 @@ class TestDispatcher:
             patch("scriber.main.parser.parse_args") as parse,
             patch("scriber.main.initialize_logger"),
             patch("scriber.main.parser.classify_input", return_value=_URL_CLASSIFICATION),
-            patch("scriber.main.make_summarizer"),  # preflight ok
+            patch("scriber.summarizers.make_summarizer"),  # preflight ok
             patch("scriber.main.handlers.handle_url", return_value=_make_transcript()),
             patch("scriber.main.handlers.write_transcript_file"),
             patch("scriber.main.handlers.summarize") as summ,
@@ -177,7 +177,7 @@ class TestDispatcher:
             patch("scriber.main.parser.parse_args") as parse,
             patch("scriber.main.initialize_logger"),
             patch("scriber.main.parser.classify_input", return_value=_URL_CLASSIFICATION),
-            patch("scriber.main.make_summarizer") as preflight,
+            patch("scriber.summarizers.make_summarizer") as preflight,
             patch("scriber.main.handlers.handle_url", return_value=_make_transcript()),
             patch("scriber.main.handlers.write_transcript_file"),
             patch("scriber.main.handlers.summarize") as summ,

@@ -13,13 +13,13 @@ import pytest
 from pyannote.core import Segment
 
 import scriber.transcription.local as plt
+from scriber.transcription.diarize import group_speaker_segments
 from scriber.transcription.local import (
     _MODEL_CACHE,
     _PREPROCESS_FILTER,
-    _maybe_preprocess,
     extract_audio,
     get_device,
-    group_speaker_segments,
+    maybe_preprocess,
 )
 
 if TYPE_CHECKING:
@@ -97,7 +97,7 @@ class TestExtractAudio:
 class TestMaybePreprocess:
     def test_disabled_returns_original_path_no_ownership(self) -> None:
         with patch("scriber.transcription.local.preprocess_audio_file") as pre:
-            path, owns = _maybe_preprocess("/some/audio.wav", preprocess=False)
+            path, owns = maybe_preprocess("/some/audio.wav", preprocess=False)
         pre.assert_not_called()
         assert path == "/some/audio.wav"
         assert owns is False
@@ -107,7 +107,7 @@ class TestMaybePreprocess:
             "scriber.transcription.local.preprocess_audio_file",
             return_value="/tmp/filtered.wav",
         ) as pre:
-            path, owns = _maybe_preprocess("/some/audio.wav", preprocess=True)
+            path, owns = maybe_preprocess("/some/audio.wav", preprocess=True)
         pre.assert_called_once_with("/some/audio.wav")
         assert path == "/tmp/filtered.wav"
         assert owns is True
@@ -125,8 +125,8 @@ class TestModelCache:
         with patch(
             "scriber.transcription.local.whisper.load_model", return_value=fake_model
         ) as load:
-            m1 = plt._load_model("tiny", "cpu")
-            m2 = plt._load_model("tiny", "cpu")
+            m1 = plt.load_model("tiny", "cpu")
+            m2 = plt.load_model("tiny", "cpu")
         load.assert_called_once_with("tiny", device="cpu")
         assert m1 is m2 is fake_model
 
@@ -138,8 +138,8 @@ class TestModelCache:
             "scriber.transcription.local.whisper.load_model",
             side_effect=[model_a, model_b],
         ) as load:
-            ma = plt._load_model("tiny", "cpu")
-            mb = plt._load_model("small", "cpu")
+            ma = plt.load_model("tiny", "cpu")
+            mb = plt.load_model("small", "cpu")
         assert load.call_count == 2
         assert ma is model_a
         assert mb is model_b

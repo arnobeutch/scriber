@@ -5,6 +5,8 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 from unittest.mock import MagicMock, patch
 
+import pytest
+
 from scriber.handlers import (
     Transcript,
     handle_media,
@@ -195,7 +197,7 @@ class TestHandleUrl:
                 return_value=(tmp_path / "audio.wav", "Vid", [], _md()),
             ),
             patch(
-                "scriber.handlers.plt.transcribe_audio_with_diarization",
+                "scriber.transcription.diarize.transcribe_audio_with_diarization",
                 return_value=("SPEAKER_00: hello", "en"),
             ) as transcribe,
         ):
@@ -225,7 +227,7 @@ class TestHandleUrl:
                 return_value=(tmp_path / "audio.wav", "Diarized", [], _md()),
             ),
             patch(
-                "scriber.handlers.plt.transcribe_audio_with_diarization",
+                "scriber.transcription.diarize.transcribe_audio_with_diarization",
                 return_value=("Alice: hi", "en"),
             ) as transcribe,
         ):
@@ -383,7 +385,7 @@ class TestHandleMedia:
         media = tmp_path / "video.mp4"
         media.write_text("")
         with patch(
-            "scriber.handlers.plt.transcribe_video_file_with_diarization",
+            "scriber.transcription.diarize.transcribe_video_file_with_diarization",
             return_value=("Alice: hi", "en"),
         ):
             t = handle_media(
@@ -392,6 +394,18 @@ class TestHandleMedia:
             )
         assert t.diarized is True
         assert t.text == "Alice: hi"
+
+    def test_diarize_without_extra_raises_actionable_error(self, tmp_path: Path) -> None:
+        # Simulate a base install (no `scriber[diarize]`): the lazy import fails,
+        # and the handler must surface an actionable hint, not a raw ImportError.
+        s = _settings(output_dir=tmp_path / "out")
+        media = tmp_path / "video.mp4"
+        media.write_text("")
+        with (
+            patch.dict("sys.modules", {"scriber.transcription.diarize": None}),
+            pytest.raises(RuntimeError, match="'diarize' extra"),
+        ):
+            handle_media(_args(input_path=str(media), language=None, diarize=True), s)
 
 
 class TestHandleText:
@@ -484,9 +498,20 @@ class TestSummarize:
             diarized=False,
         )
         fake = MagicMock()
-        with patch("scriber.handlers.make_summarizer", return_value=fake):
+        with patch("scriber.summarizers.make_summarizer", return_value=fake):
             summarize(t, _args(input_path="u"), s)
         fake.summarize.assert_called_once_with(t, input_path="u", context=None)
+
+    def test_without_extra_raises_actionable_error(self, tmp_path: Path) -> None:
+        # Simulate a base install (no `scriber[summarize]`): the lazy import
+        # fails, and summarize() must surface an actionable hint.
+        s = _settings(output_dir=tmp_path / "out")
+        t = Transcript(text="body", language="en", title="t", source="file", diarized=False)
+        with (
+            patch.dict("sys.modules", {"scriber.summarizers": None}),
+            pytest.raises(RuntimeError, match="'summarize' extra"),
+        ):
+            summarize(t, _args(input_path="u"), s)
 
     def test_context_file_read_and_passed(self, tmp_path: Path) -> None:
         s = _settings(output_dir=tmp_path / "out")
@@ -500,7 +525,7 @@ class TestSummarize:
             diarized=False,
         )
         fake = MagicMock()
-        with patch("scriber.handlers.make_summarizer", return_value=fake):
+        with patch("scriber.summarizers.make_summarizer", return_value=fake):
             summarize(t, _args(input_path="u", context_file=ctx_file), s)
         _, kwargs = fake.summarize.call_args
         assert kwargs["context"] == "glossary: foo = bar"
@@ -515,7 +540,7 @@ class TestSummarize:
             diarized=False,
         )
         fake = MagicMock()
-        with patch("scriber.handlers.make_summarizer", return_value=fake):
+        with patch("scriber.summarizers.make_summarizer", return_value=fake):
             summarize(
                 t,
                 _args(input_path="u", context_file=tmp_path / "nope.txt"),
@@ -536,7 +561,7 @@ class TestSummarize:
             diarized=False,
         )
         fake = MagicMock()
-        with patch("scriber.handlers.make_summarizer", return_value=fake):
+        with patch("scriber.summarizers.make_summarizer", return_value=fake):
             summarize(t, _args(input_path="u", context_file=empty), s)
         _, kwargs = fake.summarize.call_args
         assert kwargs["context"] is None
