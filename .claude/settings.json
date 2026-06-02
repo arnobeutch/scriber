@@ -12,7 +12,12 @@
       "Bash(just all *)",
       "Bash(rtk wc *)",
       "Bash(uv lock *)",
-      "Bash(rtk pytest *)"
+      "Bash(rtk pytest *)",
+      "Bash(sort -t: -k2 -rn)",
+      "Bash(rtk gh *)"
+    ],
+    "additionalDirectories": [
+      "/home/mprz/.claude/plans"
     ]
   }
 }
