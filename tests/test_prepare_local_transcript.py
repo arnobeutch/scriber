@@ -6,8 +6,8 @@ tests (opt-in, ``pytest -m integration``).
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
-from unittest.mock import patch
+from typing import TYPE_CHECKING, Any, cast
+from unittest.mock import MagicMock, patch
 
 import pytest
 from pyannote.core import Segment
@@ -17,6 +17,7 @@ from scriber.transcription.diarize import group_speaker_segments
 from scriber.transcription.local import (
     _MODEL_CACHE,
     _PREPROCESS_FILTER,
+    detect_language,
     extract_audio,
     get_device,
     maybe_preprocess,
@@ -34,6 +35,24 @@ class TestGetDevice:
     def test_cpu_fallback(self) -> None:
         with patch("scriber.transcription.local.torch.cuda.is_available", return_value=False):
             assert get_device() == "cpu"
+
+
+class TestDetectLanguage:
+    def test_forwards_model_n_mels_to_spectrogram(self) -> None:
+        # Regression: large-v3 / large-v3-turbo encoders expect 128 mel channels;
+        # log_mel_spectrogram defaults to 80, which crashed detect_language on the
+        # default model. The n_mels must come from the model's own dims.
+        model = MagicMock()
+        model.dims.n_mels = 128
+        model.detect_language.return_value = (None, {"en": 0.9, "fr": 0.1})
+        with (
+            patch("scriber.transcription.local.whisper.load_audio", return_value="raw"),
+            patch("scriber.transcription.local.whisper.pad_or_trim", return_value="trimmed"),
+            patch("scriber.transcription.local.whisper.log_mel_spectrogram") as mel,
+        ):
+            result = detect_language("a.wav", cast("Any", model), "cpu")
+        mel.assert_called_once_with("trimmed", n_mels=128)
+        assert result == "en"
 
 
 class TestGroupSpeakerSegments:

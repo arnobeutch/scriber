@@ -109,7 +109,11 @@ def detect_language(audio_file: str, model: whisper.Whisper, device: str) -> str
     """Detect the language of the audio file using Whisper."""
     audio = whisper.load_audio(audio_file)
     audio = whisper.pad_or_trim(audio)
-    mel = whisper.log_mel_spectrogram(audio).to(device)
+    # n_mels must match the model: large-v3 / large-v3-turbo encoders expect 128,
+    # smaller models 80. log_mel_spectrogram defaults to 80, so feeding a large-v3
+    # model an 80-mel tensor raises a channel-mismatch RuntimeError. model.transcribe
+    # picks the right n_mels internally; this hand-rolled detect path must too.
+    mel = whisper.log_mel_spectrogram(audio, n_mels=model.dims.n_mels).to(device)
     _, probs = model.detect_language(mel)
     probs_dict = cast(dict[str, float], probs)
     return max(probs_dict, key=lambda k: probs_dict[k])
