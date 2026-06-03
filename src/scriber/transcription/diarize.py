@@ -16,7 +16,7 @@ import numpy as np
 import numpy.typing as npt
 import torchaudio
 from pyannote.audio import Pipeline
-from pyannote.core import Segment, Timeline
+from pyannote.core import Segment
 from tqdm import tqdm
 
 from scriber.logger import my_logger
@@ -44,14 +44,18 @@ def diarize_speakers(audio_file: str) -> list[tuple[str, Segment]]:
     if not hf_token:
         err_msg = "Missing Hugging Face token in HUGGINGFACE_TOKEN env variable"
         raise OSError(err_msg)
-    # Needs token with access to pyannote models:
-    # - https://huggingface.co/pyannote/speaker-diarization-3.1
-    # - https://huggingface.co/pyannote/segmentation-3.0
-    pipeline = Pipeline.from_pretrained(
-        "pyannote/speaker-diarization-3.1",
-        use_auth_token=hf_token,
+    # pyannote 4.x flagship model. Needs a token with access to the gated repo:
+    # - https://huggingface.co/pyannote/speaker-diarization-community-1
+    # ``token=`` (4.x renamed use_auth_token); cast over the untyped boundary
+    # (pyright reads a stale from_pretrained signature, but token is real at runtime).
+    pipeline = cast(Any, Pipeline).from_pretrained(
+        "pyannote/speaker-diarization-community-1",
+        token=hf_token,
     )
-    diarization = pipeline(audio_file)
+    # 4.x returns a DiarizeOutput, not an Annotation. ``exclusive_speaker_diarization``
+    # is the overlap-free turn segmentation pyannote intends for downstream
+    # transcription (``speaker_diarization`` keeps overlapping turns).
+    diarization = pipeline(audio_file).exclusive_speaker_diarization
     return [(str(label), segment) for segment, _, label in diarization.itertracks(yield_label=True)]
 
 
@@ -101,35 +105,6 @@ def group_speaker_segments(
     return grouped_segments
 
 
-def detect_speech_segments(audio_file: str) -> Timeline:
-    """Run voice activity detection (VAD) and return speech regions as a Timeline.
-
-    Reads ``HUGGINGFACE_TOKEN`` from the process env — caller is expected to
-    have populated it (e.g. via ``Settings.from_env()``).
-
-    Args:
-        audio_file (str): Path to the audio file.
-
-    Returns:
-        pyannote.core.Timeline: Detected speech segments.
-
-    """
-    token = os.getenv("HUGGINGFACE_TOKEN")
-    if not token:
-        err_msg = "Missing Hugging Face token in HUGGINGFACE_TOKEN env variable"
-        raise OSError(err_msg)
-
-    # Needs token with access to gated pyannote models:
-    # - https://huggingface.co/pyannote/voice-activity-detection
-    # - https://huggingface.co/pyannote/segmentation
-    vad_pipeline = Pipeline.from_pretrained(
-        "pyannote/voice-activity-detection",
-        use_auth_token=token,
-    )
-    vad_result = vad_pipeline(audio_file)
-    return vad_result.get_timeline().support()
-
-
 def transcribe_audio_with_diarization(
     audio_file: str,
     model_size: str = "base",
@@ -161,19 +136,13 @@ def transcribe_audio_with_diarization(
             used_lang = language
             my_logger.info(f"Forced language: {used_lang}")
 
-        # Diarize speakers
+        # Diarize speakers. community-1's exclusive_speaker_diarization is already
+        # overlap-free and speech-only, so the old separate VAD + crop-filter step
+        # (a 3.x workaround) is no longer needed.
         diarized_segments = diarize_speakers(audio_file)
-        speech_timeline = detect_speech_segments(audio_file)
-
-        # Keep only diarized segments that intersect with actual speech
-        filtered_segments = [
-            (speaker, segment)
-            for speaker, segment in diarized_segments
-            if speech_timeline.crop(segment)  # returns non-empty Timeline if overlaps
-        ]
 
         # Group segments from the same speaker
-        grouped_segments = group_speaker_segments(filtered_segments, max_gap=_MAX_SPEAKER_GAP)
+        grouped_segments = group_speaker_segments(diarized_segments, max_gap=_MAX_SPEAKER_GAP)
         full_text: list[str] = []
         progress: tqdm[Any] = tqdm(
             grouped_segments,

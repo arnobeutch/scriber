@@ -10,7 +10,7 @@ name = "scriber"
 version = "0.1.0"
 description = "Transcribe and summarize YouTube videos, local media, or existing transcripts."
 readme = "README.md"
-requires-python = "==3.11.9"
+requires-python = ">=3.11"
 dependencies = [                       # transcription-only base (whisper + ffmpeg + yt-dlp)
     "bs4>=0.0.2",
     "colorama>=0.4.6",
@@ -28,7 +28,10 @@ dependencies = [                       # transcription-only base (whisper + ffmp
 [project.optional-dependencies]
 # Speaker diarization (pyannote is a torch app; needs HUGGINGFACE_TOKEN at runtime).
 diarize = [
-    "pyannote-audio>=3.3.2",
+    # pyannote 4.x is required: torchaudio >=2.11 (needed for cp314 / Python 3.14
+    # wheels) removed torchaudio.AudioMetaData, which every pyannote 3.x imports.
+    # 4.x targets the new torchaudio/torchcodec audio backend. 2026-06-03.
+    "pyannote-audio>=4.0",
     "torchaudio>=2.6.0",
 ]
 # LLM summarization backends (OpenAI / OpenRouter / local RAG via langchain+Ollama).
@@ -62,7 +65,7 @@ markers = [
 
 [tool.ruff]
 line-length = 100
-target-version = "py311"  # 2026-04-22: diverges from Boilerplate (py313) — deps pin Python 3.11.9
+target-version = "py311"  # 2026-06-03: floor of supported range (requires-python >=3.11); keep code 3.11-compatible
 extend-exclude = ["experiments"]
 
 [tool.ruff.lint]
@@ -98,7 +101,7 @@ indent-style = "space"
 
 [tool.pyright]
 typeCheckingMode = "strict"
-pythonVersion = "3.11"  # 2026-04-22: diverges from Boilerplate (3.13) — deps pin Python 3.11.9
+pythonVersion = "3.11"  # 2026-06-03: floor of supported range (requires-python >=3.11); type-check against the oldest supported Python
 include = ["src", "tests"]
 exclude = ["**/node_modules", "**/__pycache__", "**/.*", ".venv", "build", "dist"]
 extraPaths = ["src"]  # mirror pytest pythonpath so `from scriber.*` resolves in both src/ and tests/

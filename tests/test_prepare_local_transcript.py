@@ -13,7 +13,7 @@ import pytest
 from pyannote.core import Segment
 
 import scriber.transcription.local as plt
-from scriber.transcription.diarize import group_speaker_segments
+from scriber.transcription.diarize import diarize_speakers, group_speaker_segments
 from scriber.transcription.local import (
     _MODEL_CACHE,
     _PREPROCESS_FILTER,
@@ -53,6 +53,33 @@ class TestDetectLanguage:
             result = detect_language("a.wav", cast("Any", model), "cpu")
         mel.assert_called_once_with("trimmed", n_mels=128)
         assert result == "en"
+
+
+class TestDiarizeSpeakers:
+    def test_passes_token_kwarg_not_use_auth_token(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        # Regression: pyannote 4.x renamed Pipeline.from_pretrained's
+        # use_auth_token -> token. Passing the old kwarg is a TypeError on 4.x.
+        monkeypatch.setenv("HUGGINGFACE_TOKEN", "hf_test")
+        seg = Segment(0.0, 1.0)
+        # pyannote 4.x: pipeline(...) -> DiarizeOutput; we read its
+        # exclusive_speaker_diarization Annotation, then .itertracks().
+        diar_output = MagicMock()
+        diar_output.exclusive_speaker_diarization.itertracks.return_value = [
+            (seg, "t0", "SPEAKER_00")
+        ]
+        pipeline_callable = MagicMock(return_value=diar_output)
+        with patch("scriber.transcription.diarize.Pipeline") as pipeline_cls:
+            pipeline_cls.from_pretrained.return_value = pipeline_callable
+            result = diarize_speakers("a.wav")
+        _, kwargs = pipeline_cls.from_pretrained.call_args
+        assert "token" in kwargs
+        assert "use_auth_token" not in kwargs
+        assert result == [("SPEAKER_00", seg)]
+
+    def test_missing_token_raises(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.delenv("HUGGINGFACE_TOKEN", raising=False)
+        with pytest.raises(OSError, match="HUGGINGFACE_TOKEN"):
+            diarize_speakers("a.wav")
 
 
 class TestGroupSpeakerSegments:

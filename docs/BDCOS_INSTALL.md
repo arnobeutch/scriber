@@ -38,7 +38,7 @@ UV_TORCH_BACKEND=cpu uv tool install "scriber @ git+https://github.com/arnobeutc
 
 | Install | Pulls | Footprint |
 | --- | --- | --- |
-| `scriber[diarize]` (default) | whisper + CPU torch + pyannote + torchaudio + ffmpeg-python + yt-dlp | ~2.1 GB |
+| `scriber[diarize]` (default) | whisper + CPU torch + pyannote 4.x + torchaudio + torchcodec + ffmpeg-python + yt-dlp | ~2.1 GB |
 | `scriber` (`--no-diarize`) | whisper + CPU torch + ffmpeg-python + yt-dlp | ~1.3 GB |
 | `scriber[summarize]` | + chromadb/langchain/openai/textblob | BDC OS never installs this |
 
@@ -66,19 +66,28 @@ install script sets.
 > explicit CPU index:
 > `uv tool install --index https://download.pytorch.org/whl/cpu "scriber[diarize] @ <repo>"`.
 
-## Diarization needs a Hugging Face token
+## Diarization needs a Hugging Face token (and model access)
 
-The default install includes diarization, but **diarized runs** load gated
-pyannote models (`speaker-diarization-3.1`, `voice-activity-detection`). Export a
-token with access to them before running with `--diarize`:
+Diarization uses pyannote 4.x, whose pipeline is the **gated** model
+`pyannote/speaker-diarization-community-1`. Diarized runs have two one-time
+prerequisites:
+
+1. **Request access** to the gated repo (once, per HF account):
+   <https://huggingface.co/pyannote/speaker-diarization-community-1>
+2. **Export a token** for that same account before running with `--diarize`:
 
 ```bash
 export HUGGINGFACE_TOKEN=hf_...
 scriber transcribe ./meeting.mp4 --language fr --diarize
 ```
 
-Without the token, the diarize path raises a clear error and stops. Plain
-transcription (no `--diarize`) needs no token.
+Without access or a token, the diarize path fails fast (`GatedRepoError` / a
+clear message) and stops. Plain transcription (no `--diarize`) needs neither.
+
+> **pyannote 4.x note:** the old `speaker-diarization-3.1` +
+> `voice-activity-detection` trio is superseded by the single
+> `speaker-diarization-community-1` model, which yields overlap-free speech
+> turns directly — scriber no longer runs a separate VAD pass.
 
 **How scriber sources the token.** `diarize.py` reads `os.getenv("HUGGINGFACE_TOKEN")`
 straight from the **process environment**; `settings.py` additionally seeds it from

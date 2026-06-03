@@ -6,10 +6,10 @@ CLI tool to transcribe and summarize YouTube videos, local audio/video files, or
 
 ## Tech stack
 
-- Python `==3.11.9` (pinned — `openai-whisper`, `pyannote-audio`, `torchaudio` block 3.12+).
+- Python `>=3.11` (3.11–3.14 verified: resolve + cp314 wheels + live import on 3.14.5). The old `==3.11.9` pin is gone — modern `openai-whisper` / `numba` / `torch` / `pyannote-audio` all span 3.11–3.14. **Diarization requires `pyannote-audio>=4.0`**: `torchaudio>=2.11` (needed for 3.14 wheels) removed `torchaudio.AudioMetaData`, which every pyannote 3.x imports — so 3.x and 3.14 are mutually exclusive. pyannote 4.x uses `token=` (not `use_auth_token=`) and the torchcodec audio backend.
 - `uv` for dependency/env management.
-- `ruff` lint (`select = ["ALL"]`; ignores in `pyproject.toml`, `target-version = "py311"`).
-- `pyright` strict mode (`[tool.pyright]` in `pyproject.toml`, `pythonVersion = "3.11"`) — matches VSCode Pylance.
+- `ruff` lint (`select = ["ALL"]`; ignores in `pyproject.toml`, `target-version = "py311"` — the supported floor; keep code 3.11-compatible).
+- `pyright` strict mode (`[tool.pyright]` in `pyproject.toml`, `pythonVersion = "3.11"` — type-check against the oldest supported Python) — matches VSCode Pylance.
 - `.claude/hooks/python-quality.sh` runs after every `Edit`/`Write` on a `.py` file. If it exits 2, read the stderr diagnostics and fix before continuing. See `.claude/rules/python_strict.md` for the recurring traps.
 
 ## Layout
@@ -35,7 +35,7 @@ CLI tool to transcribe and summarize YouTube videos, local audio/video files, or
 | `src/scriber/transcription/youtube_captions.py` | yt-dlp-backed YouTube caption fetch. Picks manual > auto across `["fr", "en"]`. Raises `TranscriptUnavailableError` on failure. |
 | `src/scriber/transcription/youtube_audio.py` | yt-dlp-based audio download + video-id extraction + title metadata (used for the captionless-video fallback path). Smart-caches: returns existing `.wav` unless `force=True`. |
 | `src/scriber/transcription/local.py` | ffmpeg → whisper transcription (whisper engine only; **no** pyannote/torchaudio imports). Module-level `_MODEL_CACHE` avoids reloading whisper across calls. `transcribe_audio_full` is the primary entry point (returns text + lang + segments). Default audio pre-processing via `maybe_preprocess` (alimiter+dynaudnorm; gated by `Settings.preprocess_audio`). Shared engine helpers (`get_device`, `load_model`, `detect_language`, `patch_whisper_progress_bar`, `maybe_preprocess`, `extract_audio`) are imported by `diarize.py`. Module constant: `_PREPROCESS_FILTER`. |
-| `src/scriber/transcription/diarize.py` | Speaker-diarization path (pyannote + torchaudio) — the `diarize` extra. `diarize_speakers`, `detect_speech_segments`, `group_speaker_segments`, `load_audio_slice`, `transcribe_audio_with_diarization`, `transcribe_video_file_with_diarization`. Module constants `MIN_SEGMENT_DURATION` / `_MAX_SPEAKER_GAP`. Imported lazily by `handlers.py` so the base install never pulls pyannote/torchaudio. |
+| `src/scriber/transcription/diarize.py` | Speaker-diarization path (pyannote 4.x + torchaudio) — the `diarize` extra. `diarize_speakers` (loads gated `pyannote/speaker-diarization-community-1`, uses `exclusive_speaker_diarization`), `group_speaker_segments`, `load_audio_slice`, `transcribe_audio_with_diarization`, `transcribe_video_file_with_diarization`. Module constants `MIN_SEGMENT_DURATION` / `_MAX_SPEAKER_GAP`. Imported lazily by `handlers.py` so the base install never pulls pyannote/torchaudio. (4.x's community-1 produces overlap-free speech turns, so the old separate VAD step was dropped.) |
 | `src/scriber/transcription/preprocess.py` | Cleanup + speaker-name heuristics. |
 
 ## Dev workflow
