@@ -1,48 +1,62 @@
 #!/usr/bin/env bash
-# Install scriber as a lean, CPU-only transcription tool (e.g. for BDC OS).
+# Install scriber as BDC OS's transcription provider.
 #
-# Base install is transcription-only: whisper on a CPU-only torch wheel, with
-# no diarization and no summarization dependencies. Pass --diarize to add
-# speaker attribution (pulls pyannote + torchaudio, ~+0.5 GB, and needs
-# HUGGINGFACE_TOKEN at runtime for the gated pyannote models).
+# BDC OS owns this integration (canonical copy lives in the bdc_os repo); this is
+# scriber's in-sync reference copy. Installs scriber from GitHub as an isolated
+# `uv` tool — no local scriber checkout is read.
+#
+# Default install is the "reduced" scriber: CPU-only torch (sheds the ~2.7 GB
+# CUDA nvidia/* stack), speaker diarization INCLUDED, summarization backends
+# EXCLUDED (BDC OS summarizes downstream with its own skills).
+#
+#   default footprint ~2.1 GB  = base transcription + diarize stack (measured)
+#   --no-diarize     ~1.3 GB   = transcription only (leaner; no speaker labels)
+#
+# Diarization needs HUGGINGFACE_TOKEN at runtime (gated pyannote models); the
+# install itself does not.
 #
 # Usage:
-#   ./install-bdcos.sh                 # transcription-only, CPU torch
-#   ./install-bdcos.sh --diarize       # + speaker diarization extra
+#   ./scripts/install-bdcos.sh                # CPU, base + diarization (default)
+#   ./scripts/install-bdcos.sh --no-diarize   # CPU, transcription only
 #
-# scriber itself does NOT pin torch to CPU (it stays GPU-capable for its own
-# users) — we select the CPU backend here, at install time, via UV_TORCH_BACKEND.
+# scriber stays GPU-capable for its own users; the CPU choice is made HERE, at
+# install time, via UV_TORCH_BACKEND — scriber does not pin it upstream.
 set -euo pipefail
 
 REPO="git+https://github.com/arnobeutch/scriber.git"
-EXTRAS=""
+SPEC="scriber[diarize]"
+DIARIZE=1
+
+usage() {
+  sed -n '2,21p' "$0" | sed 's/^# \{0,1\}//'
+}
 
 for arg in "$@"; do
   case "$arg" in
-    --diarize) EXTRAS="diarize" ;;
+    --no-diarize)
+      SPEC="scriber"
+      DIARIZE=0
+      ;;
     -h | --help)
-      sed -n '2,18p' "$0" | sed 's/^# \{0,1\}//'
+      usage
       exit 0
       ;;
     *)
-      echo "Unknown argument: $arg (expected --diarize)" >&2
+      echo "Unknown argument: $arg (expected --no-diarize)" >&2
       exit 2
       ;;
   esac
 done
 
-# CPU-only torch. Honored by uv's resolver (uv >= 0.5; tested on 0.11). If a
-# future uv ignores it for `tool install`, fall back to an explicit CPU index:
-#   uv tool install --index https://download.pytorch.org/whl/cpu "scriber @ $REPO"
+# CPU-only torch. Honored by uv's resolver (tested on uv 0.11). If a future uv
+# ignores it for `tool install`, fall back to an explicit CPU index:
+#   uv tool install --index https://download.pytorch.org/whl/cpu "$SPEC @ $REPO"
 export UV_TORCH_BACKEND=cpu
 
-if [[ -n "$EXTRAS" ]]; then
-  echo "Installing scriber[$EXTRAS] (CPU torch) ..."
-  uv tool install "scriber[$EXTRAS] @ $REPO"
-  echo "Diarization enabled — export HUGGINGFACE_TOKEN before running --diarize."
-else
-  echo "Installing scriber (transcription-only, CPU torch) ..."
-  uv tool install "scriber @ $REPO"
-fi
+echo "Installing ${SPEC} (CPU torch) from GitHub ..."
+uv tool install "${SPEC} @ ${REPO}"
 
+if [[ "${DIARIZE}" -eq 1 ]]; then
+  echo "Diarization included — export HUGGINGFACE_TOKEN before running with --diarize."
+fi
 echo "Done. Try: scriber transcribe <input> --language <fr|en> [--diarize]"
