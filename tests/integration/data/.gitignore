@@ -1,0 +1,4 @@
+# Integration fixtures are large binary media, provided locally rather than
+# committed. Regenerate them per the docstrings in tests/integration/*.py.
+*
+!.gitignore
