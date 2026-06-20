@@ -77,6 +77,27 @@ def _add_shared_args(sub: argparse.ArgumentParser) -> None:
         help="Diarize the audio (identify speakers) in the transcript (default: False)",
     )
     sub.add_argument(
+        "--min-speakers",
+        dest="min_speakers",
+        type=int,
+        default=None,
+        help=(
+            "Lower bound on the number of distinct speakers for --diarize. "
+            "Hint to pyannote's clustering when the panel size is known. "
+            "Default: env MIN_SPEAKERS, or let pyannote decide."
+        ),
+    )
+    sub.add_argument(
+        "--max-speakers",
+        dest="max_speakers",
+        type=int,
+        default=None,
+        help=(
+            "Upper bound on the number of distinct speakers for --diarize. "
+            "Default: env MAX_SPEAKERS, or let pyannote decide."
+        ),
+    )
+    sub.add_argument(
         "--model-size",
         dest="model_size",
         choices={"tiny", "base", "small", "medium", "large", "large-v3", "large-v3-turbo"},

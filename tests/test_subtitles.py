@@ -37,7 +37,7 @@ class TestWriteSrt:
     def test_format(self, tmp_path: Path) -> None:
         path = tmp_path / "out.srt"
         write_srt(_SEGMENTS, path)
-        body = path.read_text()
+        body = path.read_text(encoding="utf-8")
         # First cue
         assert body.startswith("1\n00:00:00,000 --> 00:00:02,400\nHello world\n")
         # Second cue uses comma separator
@@ -48,7 +48,7 @@ class TestWriteVtt:
     def test_format(self, tmp_path: Path) -> None:
         path = tmp_path / "out.vtt"
         write_vtt(_SEGMENTS, path)
-        body = path.read_text()
+        body = path.read_text(encoding="utf-8")
         assert body.startswith("WEBVTT\n")
         assert "00:00:00.000 --> 00:00:02.400\nHello world" in body
         assert "00:00:02.500 --> 00:00:05.123\nSecond cue" in body

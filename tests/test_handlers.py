@@ -445,14 +445,14 @@ class TestWriteTranscriptFile:
         t = Transcript(text="hello", language="en", title="vid", source="yt_manual", diarized=False)
         out = write_transcript_file(t, s)
         assert out == tmp_path / "out" / "vid transcript.txt"
-        assert out.read_text() == "hello"
+        assert out.read_text(encoding="utf-8") == "hello"
 
     def test_writes_diarized(self, tmp_path: Path) -> None:
         s = _settings(output_dir=tmp_path / "out")
         t = Transcript(text="A: x", language="en", title="vid", source="whisper", diarized=True)
         out = write_transcript_file(t, s)
         assert out == tmp_path / "out" / "vid diarized transcript.txt"
-        assert out.read_text() == "A: x"
+        assert out.read_text(encoding="utf-8") == "A: x"
 
     def test_creates_output_dir(self, tmp_path: Path) -> None:
         s = _settings(output_dir=tmp_path / "deep" / "nested")

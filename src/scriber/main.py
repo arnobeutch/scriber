@@ -48,6 +48,8 @@ def _apply_cli_overrides(args: argparse.Namespace, base: Settings) -> Settings:
             )
         else:
             initial_prompt = loaded
+    min_speakers = getattr(args, "min_speakers", None)
+    max_speakers = getattr(args, "max_speakers", None)
     return dataclasses.replace(
         base,
         output_dir=args.output_dir or base.output_dir,
@@ -58,6 +60,8 @@ def _apply_cli_overrides(args: argparse.Namespace, base: Settings) -> Settings:
         summary_mode=getattr(args, "summary_mode", None) or base.summary_mode,
         preprocess_audio=preprocess,
         initial_prompt=initial_prompt,
+        min_speakers=min_speakers if min_speakers is not None else base.min_speakers,
+        max_speakers=max_speakers if max_speakers is not None else base.max_speakers,
     )
 
 

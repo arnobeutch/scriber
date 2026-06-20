@@ -12,9 +12,12 @@ All near-term items cleared on 2026-04-24 — see the Completed log below.
 - **Feature-flag driven builds** (`[summarize]`, `[diarize]`, `[openrouter]` extras). Enables the packaged-binary plan cheaply and makes contributor onboarding lighter.
 - **"Auto" model-size.** Pick `tiny`/`base`/`small`/`medium` from `(hardware, audio duration)`.
 - **Speaker identification at summarization time** for YT transcripts (currently only speaker IDs are shown).
+- **Multilingual sources.** Handle inputs that switch languages mid-stream (or carry a foreign-language prelude). Even after speech-based multi-sample language detection (done 2026-06-20), a single global language is still forced on the whole transcribe pass — a genuinely bilingual meeting would mis-transcribe the minority language. Options: per-speaker-turn language detection, or chunked detection with language change-points. Motivated by the 2026-06-20 run (FR talk with an EN music intro detected as EN → Whisper *translated* the entire 2h to English).
+- **Music / non-speech detection.** Detect and skip musical preludes and interludes (common in corporate conference recordings). Diarization's `exclusive_speaker_diarization` already keeps non-speech out of the transcript (confirmed 2026-06-20: a 12m50s prelude was excluded), so this is now a *nice-to-have*: an explicit VAD / audio-tagging pass (`silero-vad`, or YAMNet / PANNs / CLAP) would let us mark `[music]` regions and harden the language probe rather than being load-bearing for correctness.
 
 ## Deferred research (long-horizon)
 
+- **Near-realtime language-ID study ("Murmure").** Investigate how streaming speech-to-text products (the user cited "Murmure"/"Murmurme" — exact product TBC) achieve continuous, near-realtime language detection. Working hypothesis: a dedicated lightweight LID model run on a sliding window with temporal smoothing / majority voting, VAD-gated to speech. Goal: feed back into a more robust offline detector (and the multilingual work above). Spun off from the 2026-06-20 mis-detection.
 - **Python 3.12+/3.13 upgrade.** Current pin `==3.11.9` because `openai-whisper`, `pyannote-audio`, and `torchaudio` block newer Python. Review quarterly. If still blocked, evaluate:
   - `faster-whisper` (SYSTRAN) — CTranslate2-based, no PyTorch, typically 4× faster on CPU, same model family. Drops PyTorch and unblocks Python 3.13.
   - `whisper.cpp` bindings (e.g. `pywhispercpp`) — ggml quantized; best fit for the packaged-binary goal below.

@@ -134,7 +134,7 @@ class TestOpenAISummarizer:
             summarizer.summarize(_transcript(language="en", title="vid"), input_path="u")
         out = tmp_path / "out" / "vid - summary.md"
         assert out.exists()
-        text = out.read_text()
+        text = out.read_text(encoding="utf-8")
         assert "# Summary — vid" in text
         assert "## Summary" in text
         assert "the body of the summary" in text
@@ -280,7 +280,7 @@ class TestRagSummarizer:
                 input_path="u",
             )
         assert out_path.exists()
-        body = out_path.read_text()
+        body = out_path.read_text(encoding="utf-8")
         assert "# Résumé de la réunion — vid1" in body
         # Sentiment-everywhere: RAG output includes a sentiment section.
         assert "## Sentiment" in body

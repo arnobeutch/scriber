@@ -13,6 +13,8 @@ from pathlib import Path
 from typing import Any, cast
 
 import ffmpeg
+import numpy as np
+import numpy.typing as npt
 import torch.cuda
 import whisper
 from tqdm import tqdm
@@ -105,18 +107,32 @@ def get_device() -> str:
     return "cuda" if torch.cuda.is_available() else "cpu"
 
 
-def detect_language(audio_file: str, model: whisper.Whisper, device: str) -> str:
-    """Detect the language of the audio file using Whisper."""
-    audio = whisper.load_audio(audio_file)
-    audio = whisper.pad_or_trim(audio)
+def detect_language_probs(
+    audio: npt.NDArray[np.float32],
+    model: whisper.Whisper,
+    device: str,
+) -> dict[str, float]:
+    """Whisper's language-probability dict for a single decoded audio array.
+
+    Only the first 30s of ``audio`` is scored (``whisper.pad_or_trim``). The
+    caller chooses which window(s) to pass — see
+    :func:`scriber.transcription.diarize.detect_language_from_speech` for the
+    multi-window, speech-only probe that avoids music/silence at the head.
+    """
+    trimmed = whisper.pad_or_trim(audio)
     # n_mels must match the model: large-v3 / large-v3-turbo encoders expect 128,
     # smaller models 80. log_mel_spectrogram defaults to 80, so feeding a large-v3
     # model an 80-mel tensor raises a channel-mismatch RuntimeError. model.transcribe
     # picks the right n_mels internally; this hand-rolled detect path must too.
-    mel = whisper.log_mel_spectrogram(audio, n_mels=model.dims.n_mels).to(device)
+    mel = whisper.log_mel_spectrogram(trimmed, n_mels=model.dims.n_mels).to(device)
     _, probs = model.detect_language(mel)
-    probs_dict = cast(dict[str, float], probs)
-    return max(probs_dict, key=lambda k: probs_dict[k])
+    return cast(dict[str, float], probs)
+
+
+def detect_language(audio_file: str, model: whisper.Whisper, device: str) -> str:
+    """Detect the language from the first 30s of ``audio_file`` using Whisper."""
+    probs = detect_language_probs(whisper.load_audio(audio_file), model, device)
+    return max(probs, key=lambda k: probs[k])
 
 
 def load_model(model_size: str, device: str) -> whisper.Whisper:

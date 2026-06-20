@@ -133,6 +133,8 @@ def _transcribe_url_via_whisper(
             language=requested_lang,
             preprocess=settings.preprocess_audio,
             initial_prompt=settings.initial_prompt,
+            min_speakers=settings.min_speakers,
+            max_speakers=settings.max_speakers,
         )
     else:
         transcribed_text, used_lang, segments = plt.transcribe_audio_full(
@@ -194,6 +196,8 @@ def handle_media(args: argparse.Namespace, settings: Settings) -> Transcript:
             language=requested_lang,
             preprocess=settings.preprocess_audio,
             initial_prompt=settings.initial_prompt,
+            min_speakers=settings.min_speakers,
+            max_speakers=settings.max_speakers,
         )
     else:
         # transcribe_video_file is a thin wrapper around transcribe_audio_full

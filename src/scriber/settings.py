@@ -25,6 +25,16 @@ def _bool_from_env(value: str | None, *, default: bool) -> bool:
     return value.strip().lower() in {"1", "true", "yes", "on", "y", "t"}
 
 
+def _int_from_env(value: str | None) -> int | None:
+    """Parse an int env var; return None when unset/blank/non-numeric."""
+    if value is None or not value.strip():
+        return None
+    try:
+        return int(value.strip())
+    except ValueError:
+        return None
+
+
 def load_text_file(path: Path | None) -> str | None:
     """Read a small text file, strip whitespace, return None when missing/empty.
 
@@ -76,6 +86,8 @@ class Settings:
     wrap_width: int = _DEFAULT_WRAP_WIDTH
     summary_mode: str = _DEFAULT_SUMMARY_MODE
     preprocess_audio: bool = _DEFAULT_PREPROCESS_AUDIO
+    min_speakers: int | None = None  # diarization hint; None lets pyannote decide
+    max_speakers: int | None = None
     initial_prompt: str | None = None
     """Resolved primer text (vocabulary hint for whisper). Loaded from the
     ``INITIAL_PROMPT_FILE`` env var, the ``--initial-prompt-file`` CLI flag,
@@ -107,6 +119,8 @@ class Settings:
                 os.environ.get("PREPROCESS_AUDIO"),
                 default=_DEFAULT_PREPROCESS_AUDIO,
             ),
+            min_speakers=_int_from_env(os.environ.get("MIN_SPEAKERS")),
+            max_speakers=_int_from_env(os.environ.get("MAX_SPEAKERS")),
             initial_prompt=load_text_file(
                 Path(p) if (p := os.environ.get("INITIAL_PROMPT_FILE")) else None,
             ),

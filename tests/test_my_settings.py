@@ -119,6 +119,8 @@ _ALL_ENV_KEYS = (
     "DOWNLOADS_DIR",
     "WRAP_WIDTH",
     "SUMMARY_MODE",
+    "MIN_SPEAKERS",
+    "MAX_SPEAKERS",
 )
 
 
@@ -167,6 +169,8 @@ class TestSettingsFromEnv:
         assert s.summary_mode == "auto"
         assert s.preprocess_audio is True  # default: on
         assert s.initial_prompt is None  # no env var, no .env, no CLI
+        assert s.min_speakers is None
+        assert s.max_speakers is None
 
     def test_full_config_overrides(
         self,
@@ -187,6 +191,8 @@ class TestSettingsFromEnv:
         monkeypatch.setenv("WRAP_WIDTH", "100")
         monkeypatch.setenv("SUMMARY_MODE", "meeting")
         monkeypatch.setenv("PREPROCESS_AUDIO", "false")
+        monkeypatch.setenv("MIN_SPEAKERS", "2")
+        monkeypatch.setenv("MAX_SPEAKERS", "5")
         primer = tmp_path / "primer.txt"
         primer.write_text("Christophe, Anne, K•LINE, RAL 7021.", encoding="utf-8")
         monkeypatch.setenv("INITIAL_PROMPT_FILE", str(primer))
@@ -205,6 +211,8 @@ class TestSettingsFromEnv:
         assert s.summary_mode == "meeting"
         assert s.preprocess_audio is False  # env override took effect
         assert s.initial_prompt == "Christophe, Anne, K•LINE, RAL 7021."
+        assert s.min_speakers == 2
+        assert s.max_speakers == 5
 
     def test_empty_string_env_treated_as_unset(
         self,
@@ -215,3 +223,15 @@ class TestSettingsFromEnv:
         monkeypatch.setenv("OPENAI_API_KEY", "")
         s = Settings.from_env()
         assert s.openai_api_key is None
+
+    def test_blank_and_invalid_speaker_counts_are_none(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+        tmp_path: Path,
+    ) -> None:
+        _clean_env(monkeypatch, tmp_path)
+        monkeypatch.setenv("MIN_SPEAKERS", "   ")
+        monkeypatch.setenv("MAX_SPEAKERS", "notanumber")
+        s = Settings.from_env()
+        assert s.min_speakers is None
+        assert s.max_speakers is None

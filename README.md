@@ -58,8 +58,9 @@ Flags shared by `transcribe` and `summarize`:
 
 | Flag | Description |
 | --- | --- |
-| `-l`, `--language` | `en` or `fr`. Default: autodetect. Used as a *hint* for caption-track selection and to force whisper's transcription language. The summary always tracks the source's language (English fallback for anything other than en/fr). |
-| `--diarize` | Identify speakers when transcribing local media (default: False). |
+| `-l`, `--language` | `en` or `fr`. Default: autodetect (for `--diarize`, sampled across several speech segments rather than just the first 30s, so a music/intro prelude no longer skews detection). Used as a *hint* for caption-track selection and to force whisper's transcription language. **Pass it for known-language sources** to skip detection entirely. The summary always tracks the source's language (English fallback for anything other than en/fr). |
+| `--diarize` | Identify speakers when transcribing local media (default: False). Uses transcribe-then-assign: one whisper pass + pyannote speaker turns, joined by timestamp. |
+| `--min-speakers` / `--max-speakers` | Constrain the diarization speaker count when the panel size is known (e.g. `--min-speakers 2 --max-speakers 4`). Default from `MIN_SPEAKERS` / `MAX_SPEAKERS` env, or let pyannote decide. |
 | `--model-size` | Whisper model: `tiny`, `base`, `small`, `medium`, `large`, `large-v3`, `large-v3-turbo`. Default from `WHISPER_MODEL_SIZE` env or `large-v3-turbo` (best WER among CPU-practical models; faster than `medium` on the same hardware). Pick `small` for a speed-first draft; `medium` is functionally obsolete. |
 | `--output-dir` | Where outputs land. Default from `OUTPUT_DIR` env or `./results`. |
 | `--downloads-dir` | Where downloaded YT audio is cached. Default from `DOWNLOADS_DIR` env or `./downloads`. |
@@ -138,6 +139,7 @@ Runtime settings are loaded by `Settings.from_env()` (reads `.env` + `os.environ
 | `WRAP_WIDTH` | `80` | Soft-wrap width for non-diarized transcripts (words are never split). |
 | `PREPROCESS_AUDIO` | `true` | Apply `alimiter=0.95,dynaudnorm` ffmpeg filter chain before whisper. `false`/`0`/`off` disables. CLI `--no-preprocess` also disables. |
 | `INITIAL_PROMPT_FILE` | — | Path to a primer text file. Loaded at process start; the content (not the path) is passed to whisper as `initial_prompt`. CLI `--initial-prompt-file` overrides. |
+| `MIN_SPEAKERS` / `MAX_SPEAKERS` | — | Diarization speaker-count hints for `--diarize`. CLI `--min-speakers` / `--max-speakers` override. |
 
 ## Logging
 

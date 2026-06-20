@@ -15,10 +15,15 @@ from pyannote.core import Segment
 
 import scriber.transcription.local as plt
 from scriber.transcription.diarize import (
+    _MAX_ASSIGN_GAP,
     _SAMPLE_RATE,
+    assign_speakers_to_segments,
     decode_audio,
+    detect_language_from_speech,
     diarize_speakers,
+    format_diarized,
     group_speaker_segments,
+    relabel_by_appearance,
     slice_audio,
 )
 from scriber.transcription.local import (
@@ -129,6 +134,91 @@ class TestDecodeAudio:
             result = decode_audio("a.wav")
         load.assert_called_once_with("a.wav")
         assert result is fake
+
+
+class TestRelabelByAppearance:
+    def test_empty(self) -> None:
+        assert relabel_by_appearance([]) == []
+
+    def test_relabels_in_order_of_first_appearance(self) -> None:
+        # pyannote hands back arbitrary cluster ids (e.g. SPEAKER_11 first).
+        turns = [
+            ("SPEAKER_11", Segment(0.0, 1.0)),
+            ("SPEAKER_03", Segment(1.0, 2.0)),
+            ("SPEAKER_11", Segment(2.0, 3.0)),
+        ]
+        result = relabel_by_appearance(turns)
+        assert [label for label, _ in result] == ["SPEAKER_00", "SPEAKER_01", "SPEAKER_00"]
+        # segments are preserved untouched
+        assert [seg.start for _, seg in result] == [0.0, 1.0, 2.0]
+
+
+class TestAssignSpeakersToSegments:
+    def _turns(self) -> list[tuple[str, Segment]]:
+        return [("SPEAKER_00", Segment(0.0, 8.0)), ("SPEAKER_01", Segment(20.0, 30.0))]
+
+    def test_assigns_by_max_overlap(self) -> None:
+        segments = [{"start": 1.0, "end": 3.0, "text": "hello"}]
+        assert assign_speakers_to_segments(segments, self._turns()) == [("SPEAKER_00", "hello")]
+
+    def test_nearest_turn_within_gap_when_no_overlap(self) -> None:
+        # segment sits in a short gap just after SPEAKER_00's turn ends (8.0)
+        segments = [{"start": 9.0, "end": 10.0, "text": "in the gap"}]
+        assert assign_speakers_to_segments(segments, self._turns()) == [
+            ("SPEAKER_00", "in the gap")
+        ]
+
+    def test_drops_segment_far_from_any_turn(self) -> None:
+        # a segment farther than _MAX_ASSIGN_GAP from every turn (e.g. a music
+        # interlude diarization left unassigned) is dropped, not mislabelled.
+        far = self._turns()[-1][1].end + _MAX_ASSIGN_GAP + 5
+        segments = [{"start": far, "end": far + 1, "text": "music"}]
+        assert assign_speakers_to_segments(segments, self._turns()) == []
+
+    def test_skips_empty_text(self) -> None:
+        segments = [{"start": 1.0, "end": 3.0, "text": "   "}]
+        assert assign_speakers_to_segments(segments, self._turns()) == []
+
+
+class TestFormatDiarized:
+    def test_empty(self) -> None:
+        assert format_diarized([]) == ""
+
+    def test_groups_consecutive_same_speaker(self) -> None:
+        labeled = [
+            ("SPEAKER_00", "one"),
+            ("SPEAKER_00", "two"),
+            ("SPEAKER_01", "three"),
+            ("SPEAKER_00", "four"),
+        ]
+        assert format_diarized(labeled) == (
+            "SPEAKER_00: one two\nSPEAKER_01: three\nSPEAKER_00: four"
+        )
+
+
+class TestDetectLanguageFromSpeech:
+    def test_votes_across_windows_ignoring_the_head(self) -> None:
+        # Long buffer so slices are non-empty; turns are all speech (no head music).
+        audio = np.zeros(_SAMPLE_RATE * 400, dtype=np.float32)
+        turns = [
+            ("SPEAKER_00", Segment(100.0, 140.0)),
+            ("SPEAKER_01", Segment(200.0, 240.0)),
+        ]
+        # window 1 leans en, window 2 leans fr harder → fr wins the sum
+        with patch(
+            "scriber.transcription.diarize.detect_language_probs",
+            side_effect=[{"en": 0.9, "fr": 0.1}, {"en": 0.1, "fr": 0.95}],
+        ):
+            assert detect_language_from_speech(audio, turns, cast("Any", object()), "cpu") == "fr"
+
+    def test_falls_back_to_head_when_no_turns(self) -> None:
+        audio = np.zeros(_SAMPLE_RATE * 5, dtype=np.float32)
+        with patch(
+            "scriber.transcription.diarize.detect_language_probs",
+            return_value={"en": 0.99, "fr": 0.01},
+        ) as probs:
+            assert detect_language_from_speech(audio, [], cast("Any", object()), "cpu") == "en"
+        probs.assert_called_once()  # scored the whole-file head, not a per-turn window
 
 
 class TestGroupSpeakerSegments:
