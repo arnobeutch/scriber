@@ -127,7 +127,7 @@ Runtime settings are loaded by `Settings.from_env()` (reads `.env` + `os.environ
 | `LOG_LEVEL` | `INFO` | `DEBUG`, `INFO`, `WARNING`, `ERROR`. `-d`/`--debug` forces DEBUG. |
 | `OPENAI_API_KEY` | — | Required for `--with-openai` (or `--llm-provider openai`). |
 | `OPENROUTER_API_KEY` | — | Required for `--llm-provider openrouter`. |
-| `HUGGINGFACE_TOKEN` | — | Required for `--diarize` (pyannote speaker-diarization-3.1 + voice-activity-detection gated models). |
+| `HUGGINGFACE_TOKEN` | — | Required for `--diarize` (gated `pyannote/speaker-diarization-community-1` model). |
 | `LLM_PROVIDER` | `openai` | One of `openai`, `openrouter`, `ollama` (CLI flag overrides). |
 | `LLM_MODEL` | provider default | E.g. `gpt-4o`, `anthropic/claude-4.7-sonnet`, `mistral` (CLI flag overrides). |
 | `OPENAI_MODEL` | `gpt-4o` | Model for the OpenAI provider. |
@@ -171,6 +171,12 @@ uv run pre-commit install
 ```
 
 `git commit` will then run ruff + pyright + pytest on staged Python files.
+
+## Troubleshooting
+
+- **`torchcodec is not installed correctly` warning during `--diarize` (Windows).** Harmless. pyannote 4.x and torchaudio 2.11 decode audio through `torchcodec`, whose native libs need the FFmpeg "full-shared" DLLs and a torch version it supports — frequently absent on Windows. scriber decodes audio itself (via whisper's ffmpeg loader) and hands pyannote an in-memory waveform, so diarization runs regardless of the warning. (Earlier versions crashed here with `NameError: name 'AudioDecoder' is not defined`; that's fixed.)
+- **`unknown field 'extra-build-dependencies'` warning from uv.** Your uv predates 0.8, where `[tool.uv.extra-build-dependencies]` (which pins `setuptools<81` for the whisper build) landed. The warning is cosmetic, but a fresh `uv sync` could fail the whisper build — update uv (`uv self update`, or `pip install --upgrade uv` if you installed it via pip) to ≥0.8.
+- **`nvidia-smi found but torch.cuda.is_available() is False`.** A CPU-only torch wheel is installed. On **Windows** this shouldn't happen by default — `pyproject.toml` pins win32 torch/torchaudio to the CUDA build (cu126), so an NVIDIA GPU + recent driver gets CUDA automatically; if you still see CPU, you likely have `UV_TORCH_BACKEND=cpu` set in your environment (unset it and `uv sync`). On **Linux** torch comes from PyPI (GPU-capable); pass `UV_TORCH_BACKEND=cpu` only if you *want* the lean CPU build (see [docs/BDCOS_INSTALL.md](docs/BDCOS_INSTALL.md)). A CUDA wheel still runs on an older same-major driver via CUDA minor-version compatibility (e.g. cu126 on a CUDA 12.4 driver).
 
 ## Further reading
 

@@ -1,4 +1,6 @@
 {
-    "python.defaultInterpreterPath": "${workspaceFolder}/.venv/bin/python",
+    // No hardcoded interpreter path: the venv layout differs by OS
+    // (.venv/Scripts/python.exe on Windows, .venv/bin/python on Linux/macOS).
+    // The Python extension auto-detects the workspace .venv on each platform.
     "python.terminal.activateEnvironment": false
 }

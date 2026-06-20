@@ -9,11 +9,18 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Any, cast
 from unittest.mock import MagicMock, patch
 
+import numpy as np
 import pytest
 from pyannote.core import Segment
 
 import scriber.transcription.local as plt
-from scriber.transcription.diarize import diarize_speakers, group_speaker_segments
+from scriber.transcription.diarize import (
+    _SAMPLE_RATE,
+    decode_audio,
+    diarize_speakers,
+    group_speaker_segments,
+    slice_audio,
+)
 from scriber.transcription.local import (
     _MODEL_CACHE,
     _PREPROCESS_FILTER,
@@ -68,18 +75,60 @@ class TestDiarizeSpeakers:
             (seg, "t0", "SPEAKER_00")
         ]
         pipeline_callable = MagicMock(return_value=diar_output)
+        audio = np.zeros(_SAMPLE_RATE, dtype=np.float32)
         with patch("scriber.transcription.diarize.Pipeline") as pipeline_cls:
             pipeline_cls.from_pretrained.return_value = pipeline_callable
-            result = diarize_speakers("a.wav")
+            result = diarize_speakers(audio)
         _, kwargs = pipeline_cls.from_pretrained.call_args
         assert "token" in kwargs
         assert "use_auth_token" not in kwargs
         assert result == [("SPEAKER_00", seg)]
 
+    def test_feeds_in_memory_waveform_not_a_path(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        # Regression: pyannote 4.x / torchaudio 2.11 decode through torchcodec,
+        # whose native libs fail on Windows (NameError: AudioDecoder). We must
+        # hand the pipeline a preloaded {"waveform", "sample_rate"} mapping so it
+        # never touches torchcodec — never a file path.
+        monkeypatch.setenv("HUGGINGFACE_TOKEN", "hf_test")
+        diar_output = MagicMock()
+        diar_output.exclusive_speaker_diarization.itertracks.return_value = []
+        pipeline_callable = MagicMock(return_value=diar_output)
+        audio = np.zeros(_SAMPLE_RATE, dtype=np.float32)
+        with patch("scriber.transcription.diarize.Pipeline") as pipeline_cls:
+            pipeline_cls.from_pretrained.return_value = pipeline_callable
+            diarize_speakers(audio)
+        (call_arg,), _ = pipeline_callable.call_args
+        assert isinstance(call_arg, dict)
+        mapping = cast("dict[str, Any]", call_arg)
+        assert mapping["sample_rate"] == _SAMPLE_RATE
+        waveform = mapping["waveform"]
+        assert waveform.shape == (1, _SAMPLE_RATE)  # (channel, time)
+
     def test_missing_token_raises(self, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.delenv("HUGGINGFACE_TOKEN", raising=False)
         with pytest.raises(OSError, match="HUGGINGFACE_TOKEN"):
-            diarize_speakers("a.wav")
+            diarize_speakers(np.zeros(_SAMPLE_RATE, dtype=np.float32))
+
+
+class TestSliceAudio:
+    def test_slices_by_seconds(self) -> None:
+        audio = np.arange(_SAMPLE_RATE * 3, dtype=np.float32)  # 3 seconds
+        sliced = slice_audio(audio, 1.0, 2.0)
+        assert len(sliced) == _SAMPLE_RATE
+        assert sliced[0] == float(_SAMPLE_RATE)  # first sample of second 1
+
+    def test_empty_when_start_equals_end(self) -> None:
+        audio = np.arange(_SAMPLE_RATE, dtype=np.float32)
+        assert len(slice_audio(audio, 0.5, 0.5)) == 0
+
+
+class TestDecodeAudio:
+    def test_delegates_to_whisper_load_audio(self) -> None:
+        fake = np.zeros(8, dtype=np.float32)
+        with patch("scriber.transcription.diarize.whisper.load_audio", return_value=fake) as load:
+            result = decode_audio("a.wav")
+        load.assert_called_once_with("a.wav")
+        assert result is fake
 
 
 class TestGroupSpeakerSegments:

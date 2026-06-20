@@ -1,11 +1,19 @@
-# Boundary to untyped ML deps (pyannote, torchaudio, whisper). 2026-06-02:
+# Boundary to untyped ML deps (pyannote, whisper). 2026-06-02:
 # suppress unknown-type reports here; keep call/argument/attribute checks on.
 # pyright: reportUnknownMemberType=false, reportUnknownVariableType=false, reportUnknownArgumentType=false, reportUnknownParameterType=false
-"""Speaker diarization path (pyannote + torchaudio).
+"""Speaker diarization path (pyannote).
 
 Imported lazily by the handlers only when ``--diarize`` is requested, so the
 transcription-only base install (no ``scriber[diarize]``) never pulls
-pyannote/torchaudio. The shared whisper helpers live in :mod:`scriber.transcription.local`.
+pyannote. The shared whisper helpers live in :mod:`scriber.transcription.local`.
+
+Audio is decoded once with whisper's ffmpeg loader and kept in memory: pyannote
+4.x (and torchaudio 2.11) otherwise read audio through ``torchcodec``, whose
+native libs are brittle on Windows — they need the FFmpeg "full-shared" DLLs and
+a matching torch version, and fail closed to a warning (leaving pyannote's
+``AudioDecoder`` undefined → ``NameError`` at first use). Feeding pyannote a
+preloaded ``{"waveform", "sample_rate"}`` mapping bypasses torchcodec entirely
+(see :class:`pyannote.audio.core.io.Audio`).
 """
 
 import os
@@ -14,7 +22,8 @@ from typing import Any, cast
 
 import numpy as np
 import numpy.typing as npt
-import torchaudio
+import torch
+import whisper
 from pyannote.audio import Pipeline
 from pyannote.core import Segment
 from tqdm import tqdm
@@ -31,15 +40,25 @@ from scriber.transcription.local import (
 
 MIN_SEGMENT_DURATION: float = 1.5  # seconds; skip whisper output shorter than this
 _MAX_SPEAKER_GAP: float = 1.0  # seconds; merge consecutive same-speaker segments within this gap
+_SAMPLE_RATE: int = 16000  # whisper.load_audio always returns mono PCM at 16 kHz
 
 
-def diarize_speakers(audio_file: str) -> list[tuple[str, Segment]]:
-    """Diarize speakers in the audio file using PyAnnote.
+def decode_audio(audio_file: str) -> npt.NDArray[np.float32]:
+    """Decode `audio_file` to a mono float32 array at 16 kHz via whisper's ffmpeg loader.
+
+    Keeps the diarization path off torchcodec (see module docstring): the same
+    decoded array is handed to pyannote in memory and sliced per speaker turn.
+    """
+    return cast(npt.NDArray[np.float32], whisper.load_audio(audio_file))
+
+
+def diarize_speakers(audio: npt.NDArray[np.float32]) -> list[tuple[str, Segment]]:
+    """Diarize speakers in a preloaded mono 16 kHz waveform using PyAnnote.
 
     Reads ``HUGGINGFACE_TOKEN`` from the process env — caller is expected to
     have populated it (e.g. via ``Settings.from_env()``).
     """
-    my_logger.info(f"Diarizing speakers in: {audio_file}")
+    my_logger.info("Diarizing speakers")
     hf_token = os.getenv("HUGGINGFACE_TOKEN")
     if not hf_token:
         err_msg = "Missing Hugging Face token in HUGGINGFACE_TOKEN env variable"
@@ -52,20 +71,25 @@ def diarize_speakers(audio_file: str) -> list[tuple[str, Segment]]:
         "pyannote/speaker-diarization-community-1",
         token=hf_token,
     )
+    # Feed an in-memory (channel, time) waveform so pyannote skips torchcodec
+    # decoding (see pyannote.audio.core.io.Audio.validate_file). ascontiguousarray
+    # guarantees the C-contiguous float32 buffer torch.from_numpy needs.
+    waveform = torch.from_numpy(np.ascontiguousarray(audio)).unsqueeze(0)
+    diar_input = {"waveform": waveform, "sample_rate": _SAMPLE_RATE}
     # 4.x returns a DiarizeOutput, not an Annotation. ``exclusive_speaker_diarization``
     # is the overlap-free turn segmentation pyannote intends for downstream
     # transcription (``speaker_diarization`` keeps overlapping turns).
-    diarization = pipeline(audio_file).exclusive_speaker_diarization
+    diarization = pipeline(diar_input).exclusive_speaker_diarization
     return [(str(label), segment) for segment, _, label in diarization.itertracks(yield_label=True)]
 
 
-def load_audio_slice(audio_path: str, start: float, end: float) -> npt.NDArray[np.floating[Any]]:
-    """Load a slice of audio between `start` and `end` seconds."""
-    waveform, sample_rate = torchaudio.load(audio_path)
-    start_sample = int(start * sample_rate)
-    end_sample = int(end * sample_rate)
-    sliced_waveform = waveform[:, start_sample:end_sample]
-    return sliced_waveform.mean(dim=0).numpy()  # convert to mono np.array
+def slice_audio(
+    audio: npt.NDArray[np.float32],
+    start: float,
+    end: float,
+) -> npt.NDArray[np.float32]:
+    """Return the mono samples of `audio` between `start` and `end` seconds."""
+    return audio[int(start * _SAMPLE_RATE) : int(end * _SAMPLE_RATE)]
 
 
 def group_speaker_segments(
@@ -136,10 +160,13 @@ def transcribe_audio_with_diarization(
             used_lang = language
             my_logger.info(f"Forced language: {used_lang}")
 
+        # Decode once; reuse for diarization (in memory) and per-turn slicing.
+        audio = decode_audio(audio_file)
+
         # Diarize speakers. community-1's exclusive_speaker_diarization is already
         # overlap-free and speech-only, so the old separate VAD + crop-filter step
         # (a 3.x workaround) is no longer needed.
-        diarized_segments = diarize_speakers(audio_file)
+        diarized_segments = diarize_speakers(audio)
 
         # Group segments from the same speaker
         grouped_segments = group_speaker_segments(diarized_segments, max_gap=_MAX_SPEAKER_GAP)
@@ -153,7 +180,7 @@ def transcribe_audio_with_diarization(
             # Skip segments that are too short (silence or noise)
             if segment.end - segment.start < MIN_SEGMENT_DURATION:
                 continue
-            sliced_audio = load_audio_slice(audio_file, segment.start, segment.end)
+            sliced_audio = slice_audio(audio, segment.start, segment.end)
             segment_result = model.transcribe(
                 sliced_audio,
                 fp16=(device == "cuda"),
