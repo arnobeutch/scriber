@@ -81,7 +81,8 @@ class TestDiarizeSpeakers:
         ]
         pipeline_callable = MagicMock(return_value=diar_output)
         audio = np.zeros(_SAMPLE_RATE, dtype=np.float32)
-        with patch("scriber.transcription.diarize.Pipeline") as pipeline_cls:
+        # Pipeline is imported lazily inside diarize_speakers, so patch the source.
+        with patch("pyannote.audio.Pipeline") as pipeline_cls:
             pipeline_cls.from_pretrained.return_value = pipeline_callable
             result = diarize_speakers(audio)
         _, kwargs = pipeline_cls.from_pretrained.call_args
@@ -99,7 +100,7 @@ class TestDiarizeSpeakers:
         diar_output.exclusive_speaker_diarization.itertracks.return_value = []
         pipeline_callable = MagicMock(return_value=diar_output)
         audio = np.zeros(_SAMPLE_RATE, dtype=np.float32)
-        with patch("scriber.transcription.diarize.Pipeline") as pipeline_cls:
+        with patch("pyannote.audio.Pipeline") as pipeline_cls:
             pipeline_cls.from_pretrained.return_value = pipeline_callable
             diarize_speakers(audio)
         (call_arg,), _ = pipeline_callable.call_args

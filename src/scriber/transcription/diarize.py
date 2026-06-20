@@ -17,6 +17,7 @@ preloaded ``{"waveform", "sample_rate"}`` mapping bypasses torchcodec entirely
 """
 
 import os
+import warnings
 from pathlib import Path
 from typing import Any, cast
 
@@ -24,7 +25,6 @@ import numpy as np
 import numpy.typing as npt
 import torch
 import whisper
-from pyannote.audio import Pipeline
 from pyannote.core import Segment
 
 from scriber.logger import my_logger
@@ -72,6 +72,19 @@ def diarize_speakers(
     if not hf_token:
         err_msg = "Missing Hugging Face token in HUGGINGFACE_TOKEN env variable"
         raise OSError(err_msg)
+    # Import pyannote.audio here, not at module top: it loads torchcodec on
+    # import and emits a long multi-traceback UserWarning when torchcodec's
+    # native libs can't load (common on Windows — missing FFmpeg "full-shared"
+    # DLLs / torch version mismatch). We feed pyannote an in-memory waveform and
+    # never use torchcodec, so that warning is pure noise — suppress just it.
+    # (pyannote.core, imported at module top, does not trigger it.)
+    with warnings.catch_warnings():
+        warnings.filterwarnings(
+            "ignore",
+            message=r"(?s).*torchcodec is not installed",
+            category=UserWarning,
+        )
+        from pyannote.audio import Pipeline
     # pyannote 4.x flagship model. Needs a token with access to the gated repo:
     # - https://huggingface.co/pyannote/speaker-diarization-community-1
     # ``token=`` (4.x renamed use_auth_token); cast over the untyped boundary
