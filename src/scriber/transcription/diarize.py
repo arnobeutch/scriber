@@ -93,6 +93,14 @@ def diarize_speakers(
         "pyannote/speaker-diarization-community-1",
         token=hf_token,
     )
+    # pyannote loads on CPU by default; on long recordings CPU diarization runs
+    # at ~realtime and dominates the whole pipeline (e.g. ~2h of a 2h video).
+    # Move it to the GPU when available — pyannote streams audio chunks to the
+    # model's device internally, so the CPU waveform below needs no move.
+    device = get_device()
+    if device == "cuda":
+        cast(Any, pipeline).to(torch.device("cuda"))
+    my_logger.info(f"\tDiarization device: {device}")
     # Feed an in-memory (channel, time) waveform so pyannote skips torchcodec
     # decoding (see pyannote.audio.core.io.Audio.validate_file). ascontiguousarray
     # guarantees the C-contiguous float32 buffer torch.from_numpy needs.
