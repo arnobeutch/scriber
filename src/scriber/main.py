@@ -163,6 +163,8 @@ def _process_one(
         settings,
         subtitles=args.subtitles,
     )
+    if getattr(args, "suggest_primer", False):
+        handlers.write_primer_draft(transcript, settings)
     my_logger.info(f"Video title: {transcript.title}")
 
     if will_summarize:

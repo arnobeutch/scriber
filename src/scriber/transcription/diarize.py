@@ -331,7 +331,8 @@ def transcribe_audio_with_diarization(
     initial_prompt: str | None = None,
     min_speakers: int | None = None,
     max_speakers: int | None = None,
-) -> tuple[str, str]:
+    word_timestamps: bool = False,
+) -> tuple[str, str, list[dict[str, Any]]]:
     """Transcribe audio with speaker diarization (transcribe-then-assign).
 
     One full whisper pass produces timestamped segments; pyannote produces
@@ -346,6 +347,10 @@ def transcribe_audio_with_diarization(
     the raw audio, since loudness normalization can blur speaker embeddings.
     ``initial_prompt`` seeds whisper's decoder with a vocabulary primer.
     ``min_speakers`` / ``max_speakers`` hint pyannote's clustering when known.
+    ``word_timestamps`` is forwarded to whisper (for ``--suggest-primer``).
+    Returns ``(speaker-labelled text, language, raw whisper segments)`` — the
+    segments are the un-labelled whisper cues (with word data when requested),
+    suitable for subtitle/primer use.
     """
     device = get_device()
     my_logger.info(f"\tUsing device: {device}")
@@ -373,10 +378,11 @@ def transcribe_audio_with_diarization(
         language=used_lang,
         preprocess=preprocess,
         initial_prompt=initial_prompt,
+        word_timestamps=word_timestamps,
     )
     grouped_turns = group_speaker_segments(speaker_turns, max_gap=_MAX_SPEAKER_GAP)
     labeled = assign_speakers_to_segments(segments, grouped_turns)
-    return format_diarized(labeled), used_lang
+    return format_diarized(labeled), used_lang, segments
 
 
 def transcribe_video_file_with_diarization(
@@ -388,12 +394,13 @@ def transcribe_video_file_with_diarization(
     initial_prompt: str | None = None,
     min_speakers: int | None = None,
     max_speakers: int | None = None,
-) -> tuple[str, str]:
+    word_timestamps: bool = False,
+) -> tuple[str, str, list[dict[str, Any]]]:
     """Full pipeline: Extract audio from video, transcribe it with diarization."""
     my_logger.info(f"Processing with diarization: {video_file}")
     audio_path = extract_audio(video_file)
     try:
-        transcription, used_lang = transcribe_audio_with_diarization(
+        transcription, used_lang, segments = transcribe_audio_with_diarization(
             audio_path,
             model_size=model_size,
             language=language,
@@ -401,7 +408,8 @@ def transcribe_video_file_with_diarization(
             initial_prompt=initial_prompt,
             min_speakers=min_speakers,
             max_speakers=max_speakers,
+            word_timestamps=word_timestamps,
         )
     finally:
         Path(audio_path).unlink()
-    return transcription, used_lang
+    return transcription, used_lang, segments

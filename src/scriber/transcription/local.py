@@ -150,6 +150,7 @@ def transcribe_audio_full(
     *,
     preprocess: bool = True,
     initial_prompt: str | None = None,
+    word_timestamps: bool = False,
 ) -> tuple[str, str, list[dict[str, Any]]]:
     """Transcribe + return ``(text, language, segments)``.
 
@@ -158,7 +159,9 @@ def transcribe_audio_full(
     default ffmpeg filter chain (``alimiter + dynaudnorm``) before
     transcription unless disabled. ``initial_prompt`` seeds whisper's
     decoder with a primer text (proper nouns, acronyms, jargon) — see
-    docs/WHISPER_SETUP.md.
+    docs/WHISPER_SETUP.md. ``word_timestamps`` adds per-word timing +
+    probabilities to each segment (used by ``--suggest-primer`` to flag
+    low-confidence words; modestly slower).
     """
     my_logger.info(f"Transcribing audio file: {audio_file}")
     audio_file, owns_temp = maybe_preprocess(audio_file, preprocess=preprocess)
@@ -186,6 +189,7 @@ def transcribe_audio_full(
             # toward it and the error compounds. See docs/WHISPER_SETUP.md.
             condition_on_previous_text=False,
             initial_prompt=initial_prompt,
+            word_timestamps=word_timestamps,
         )
         segments = cast(list[dict[str, Any]], result.get("segments", []))
         return cast(str, result["text"]), used_lang, segments

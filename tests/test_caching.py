@@ -40,6 +40,7 @@ def _args(**overrides: object) -> MagicMock:
         "model_size": None,
         "llm_provider": None,
         "llm_model": None,
+        "suggest_primer": False,
     }
     defaults.update(overrides)
     return MagicMock(**defaults)

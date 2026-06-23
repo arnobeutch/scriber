@@ -41,7 +41,7 @@ def test_french_diarized_excerpt_detects_french_and_five_speakers() -> None:
 
     from scriber.transcription.diarize import transcribe_audio_with_diarization
 
-    text, language = transcribe_audio_with_diarization(
+    text, language, _segments = transcribe_audio_with_diarization(
         str(_FIXTURE),
         model_size="large-v3-turbo",
         min_speakers=_EXPECTED_SPEAKERS,

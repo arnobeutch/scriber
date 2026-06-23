@@ -267,6 +267,17 @@ minutes of edit per quarter. The output transcript becomes
 proper-noun-clean, which materially improves downstream summarization,
 search, and reviewability.
 
+**Bootstrapping the primer automatically (scriber).** Instead of step 1
+(listen + note by hand), run a transcription once with `--suggest-primer`:
+scriber writes a `<title> primer.draft.txt` next to the transcript with the
+proper nouns, acronyms, and the words whisper was least sure about (it enables
+word timestamps to score confidence). Review it — fix spellings, delete noise —
+then feed it back via `--initial-prompt-file` for a second pass. Because the
+draft keeps its review notes as `#` comment lines (which the loader ignores), it
+is usable as-is after trimming. This also makes spellings *consistent*: on a long
+file whisper otherwise spells the same name several ways (it runs with
+`condition_on_previous_text=False`), and a primer pins one form throughout.
+
 ### Skip these unless you have a reason
 
 - `beam_size`, `patience`, `length_penalty` — second-order. Defaults are

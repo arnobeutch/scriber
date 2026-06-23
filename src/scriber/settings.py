@@ -38,15 +38,19 @@ def _int_from_env(value: str | None) -> int | None:
 def load_text_file(path: Path | None) -> str | None:
     """Read a small text file, strip whitespace, return None when missing/empty.
 
-    Shared by ``INITIAL_PROMPT_FILE`` env loading and the CLI / interactive
-    paths in ``main`` — the rest of the code only ever sees the resolved
-    string content, never a file path.
+    Full-line ``#`` comments are dropped, so an auto-generated primer draft
+    (``--suggest-primer``, with ``#`` review notes) is usable as-is when fed
+    back via ``--initial-prompt-file`` — no need to strip the annotations by
+    hand. Shared by ``INITIAL_PROMPT_FILE`` env loading and the CLI /
+    interactive paths in ``main``; callers only ever see the resolved string.
     """
     if path is None:
         return None
     if not path.is_file():
         return None
-    return path.read_text(encoding="utf-8").strip() or None
+    raw = path.read_text(encoding="utf-8")
+    body = "\n".join(line for line in raw.splitlines() if not line.lstrip().startswith("#"))
+    return body.strip() or None
 
 
 def _load_dotenv(path: Path = Path(".env")) -> None:

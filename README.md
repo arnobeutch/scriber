@@ -66,8 +66,9 @@ Flags shared by `transcribe` and `summarize`:
 | `--downloads-dir` | Where downloaded YT audio is cached. Default from `DOWNLOADS_DIR` env or `./downloads`. |
 | `--force` | Re-download audio and re-transcribe even when a cached `.wav` or transcript already exists. |
 | `--no-preprocess` | Disable the default audio pre-processing chain (`alimiter=0.95 + dynaudnorm`). Use when the source is already cleaned. |
-| `--initial-prompt-file PATH` | Path to a short text file (in the audio's language) listing proper nouns, acronyms, and jargon — seeds whisper's decoder. See [docs/WHISPER_SETUP.md](docs/WHISPER_SETUP.md) for what to put in it. If omitted on an interactive TTY, scriber asks before proceeding without one. Default: env `INITIAL_PROMPT_FILE`, or none. |
-| `--subtitles` | Also write `.srt` and `.vtt` subtitle files alongside the `.txt` transcript (whisper transcription only — YT captions and diarized output don't carry per-cue timestamps). |
+| `--initial-prompt-file PATH` | Path to a short text file (in the audio's language) listing proper nouns, acronyms, and jargon — seeds whisper's decoder. `#` comment lines are ignored, so a `--suggest-primer` draft works as-is. See [docs/WHISPER_SETUP.md](docs/WHISPER_SETUP.md) for what to put in it. If omitted on an interactive TTY, scriber asks before proceeding without one. Default: env `INITIAL_PROMPT_FILE`, or none. |
+| `--suggest-primer` | After transcribing, write `<title> primer.draft.txt` next to the transcript — proper nouns, acronyms, and the words whisper was least sure about. Review/fix it, then re-run with `--initial-prompt-file` for a better, spelling-consistent pass. Enables word timestamps (slightly slower). |
+| `--subtitles` | Also write `.srt` and `.vtt` subtitle files alongside the `.txt` transcript (any whisper transcription, including `--diarize`; not for YT captions, which carry no per-cue timestamps). |
 | `--dry-run` | Print what the pipeline would do (input type, model, output dir) without doing any work. |
 | `-d`, `--debug` | Enable DEBUG-level logging (default: False). |
 

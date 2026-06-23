@@ -163,8 +163,21 @@ def _add_shared_args(sub: argparse.ArgumentParser) -> None:
         default=False,
         help=(
             "Also write .srt and .vtt subtitle files alongside the .txt "
-            "transcript (whisper transcription only, not for YT captions or "
-            "diarized output)."
+            "transcript (whisper transcription, including diarized; not for YT "
+            "captions, which carry no per-cue timestamps)."
+        ),
+    )
+    sub.add_argument(
+        "--suggest-primer",
+        dest="suggest_primer",
+        action="store_true",
+        default=False,
+        help=(
+            "After transcribing, write a draft primer file (proper nouns, "
+            "acronyms, and words whisper was unsure about) next to the "
+            "transcript. Review/fix it, then re-run with --initial-prompt-file "
+            "to improve and make spellings consistent. Enables word timestamps "
+            "(slightly slower). See docs/WHISPER_SETUP.md."
         ),
     )
     sub.add_argument(

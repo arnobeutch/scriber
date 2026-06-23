@@ -38,6 +38,16 @@ class TestLoadTextFile:
         p.write_text("Réunion : K•LINE, Wienerberger.", encoding="utf-8")
         assert load_text_file(p) == "Réunion : K•LINE, Wienerberger."
 
+    def test_strips_hash_comment_lines(self, tmp_path: Path) -> None:
+        # A primer draft (--suggest-primer) keeps #-prefixed notes inline; those
+        # must be dropped so the file is usable as-is via --initial-prompt-file.
+        p = tmp_path / "primer.draft.txt"
+        p.write_text(
+            "# Auto-suggested primer\nWienerberger, RAL\n#   Culmi: 0.40\n",
+            encoding="utf-8",
+        )
+        assert load_text_file(p) == "Wienerberger, RAL"
+
 
 class TestLoadDotenv:
     def test_missing_file_is_noop(self, tmp_path: Path) -> None:

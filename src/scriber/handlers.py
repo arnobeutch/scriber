@@ -15,7 +15,7 @@ from __future__ import annotations
 import argparse
 from dataclasses import replace
 from pathlib import Path
-from typing import cast
+from typing import Any, cast
 
 from langdetect import LangDetectException, detect
 
@@ -121,13 +121,14 @@ def _transcribe_url_via_whisper(
             metadata=replace(metadata, detected_language=requested_lang),
         )
 
+    want_words = bool(getattr(args, "suggest_primer", False))
     segments: list[dict[str, object]] = []
     if args.diarize:
         try:
             from scriber.transcription.diarize import transcribe_audio_with_diarization
         except ImportError as exc:
             raise RuntimeError(_DIARIZE_EXTRA_HINT) from exc
-        transcribed_text, used_lang = transcribe_audio_with_diarization(
+        transcribed_text, used_lang, segments = transcribe_audio_with_diarization(
             str(audio_path),
             model_size=settings.whisper_model_size,
             language=requested_lang,
@@ -135,6 +136,7 @@ def _transcribe_url_via_whisper(
             initial_prompt=settings.initial_prompt,
             min_speakers=settings.min_speakers,
             max_speakers=settings.max_speakers,
+            word_timestamps=want_words,
         )
     else:
         transcribed_text, used_lang, segments = plt.transcribe_audio_full(
@@ -143,6 +145,7 @@ def _transcribe_url_via_whisper(
             language=requested_lang,
             preprocess=settings.preprocess_audio,
             initial_prompt=settings.initial_prompt,
+            word_timestamps=want_words,
         )
     summary_lang = derive_whisper_summary_language(used_lang, requested_lang)
     return Transcript(
@@ -184,13 +187,14 @@ def handle_media(args: argparse.Namespace, settings: Settings) -> Transcript:
     """
     title = sanitize_filename(Path(args.input_path).stem)
     requested_lang: str | None = args.language
+    want_words = bool(getattr(args, "suggest_primer", False))
     segments: list[dict[str, object]] = []
     if args.diarize:
         try:
             from scriber.transcription.diarize import transcribe_video_file_with_diarization
         except ImportError as exc:
             raise RuntimeError(_DIARIZE_EXTRA_HINT) from exc
-        text, used_lang = transcribe_video_file_with_diarization(
+        text, used_lang, segments = transcribe_video_file_with_diarization(
             args.input_path,
             model_size=settings.whisper_model_size,
             language=requested_lang,
@@ -198,6 +202,7 @@ def handle_media(args: argparse.Namespace, settings: Settings) -> Transcript:
             initial_prompt=settings.initial_prompt,
             min_speakers=settings.min_speakers,
             max_speakers=settings.max_speakers,
+            word_timestamps=want_words,
         )
     else:
         # transcribe_video_file is a thin wrapper around transcribe_audio_full
@@ -211,6 +216,7 @@ def handle_media(args: argparse.Namespace, settings: Settings) -> Transcript:
                 language=requested_lang,
                 preprocess=settings.preprocess_audio,
                 initial_prompt=settings.initial_prompt,
+                word_timestamps=want_words,
             )
         finally:
             Path(audio_tmp).unlink()
@@ -288,6 +294,30 @@ def write_transcript_file(
             write_vtt(transcript.segments, vtt_path)
             my_logger.info(f"Subtitles written to {srt_path} and {vtt_path}")
 
+    return p
+
+
+def write_primer_draft(transcript: Transcript, settings: Settings) -> Path | None:
+    """Write a reviewable primer draft from the transcription's whisper segments.
+
+    Returns the draft path, or ``None`` when there are no segments to harvest
+    (e.g. a cached transcript or YT-caption source). Review and trim the draft,
+    then feed it back via ``--initial-prompt-file`` for a consolidation pass.
+    """
+    from scriber.primer import extract_primer_candidates, format_primer_draft
+
+    if not transcript.segments:
+        my_logger.warning(
+            "--suggest-primer: no whisper segments available "
+            "(cached transcript or YT captions) — skipping primer draft.",
+        )
+        return None
+    candidates = extract_primer_candidates(cast("list[dict[str, Any]]", transcript.segments))
+    draft = format_primer_draft(candidates, transcript.title)
+    p = settings.output_dir / f"{transcript.title} primer.draft.txt"
+    p.parent.mkdir(parents=True, exist_ok=True)
+    p.write_text(draft, encoding="utf-8")
+    my_logger.info(f"Primer draft written to {p} — review, then pass via --initial-prompt-file.")
     return p
 
 

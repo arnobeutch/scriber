@@ -54,6 +54,7 @@ def _args(**overrides: object) -> MagicMock:
         "llm_provider": None,
         "llm_model": None,
         "context_file": None,
+        "suggest_primer": False,
     }
     defaults.update(overrides)
     return MagicMock(**defaults)
@@ -185,6 +186,7 @@ class TestHandleUrl:
             language=None,
             preprocess=True,
             initial_prompt=None,
+            word_timestamps=False,
         )
 
     def test_diarize_flag_skips_captions_for_yt_urls(self, tmp_path: Path) -> None:
@@ -198,7 +200,7 @@ class TestHandleUrl:
             ),
             patch(
                 "scriber.transcription.diarize.transcribe_audio_with_diarization",
-                return_value=("SPEAKER_00: hello", "en"),
+                return_value=("SPEAKER_00: hello", "en", []),
             ) as transcribe,
         ):
             t = handle_url(
@@ -228,7 +230,7 @@ class TestHandleUrl:
             ),
             patch(
                 "scriber.transcription.diarize.transcribe_audio_with_diarization",
-                return_value=("Alice: hi", "en"),
+                return_value=("Alice: hi", "en", []),
             ) as transcribe,
         ):
             t = handle_url(
@@ -270,6 +272,7 @@ class TestHandleUrl:
             language=None,
             preprocess=True,
             initial_prompt=None,
+            word_timestamps=False,
         )
 
     def test_fallback_forces_requested_language_to_whisper(
@@ -300,6 +303,7 @@ class TestHandleUrl:
             language="fr",
             preprocess=True,
             initial_prompt=None,
+            word_timestamps=False,
         )
         assert t.language == "fr"
 
@@ -342,6 +346,7 @@ class TestHandleMedia:
             language=None,
             preprocess=True,
             initial_prompt=None,
+            word_timestamps=False,
         )
 
     def test_explicit_language_forces_whisper(self, tmp_path: Path) -> None:
@@ -364,6 +369,7 @@ class TestHandleMedia:
             language="fr",
             preprocess=True,
             initial_prompt=None,
+            word_timestamps=False,
         )
         assert t.language == "fr"
 
@@ -386,7 +392,7 @@ class TestHandleMedia:
         media.write_text("")
         with patch(
             "scriber.transcription.diarize.transcribe_video_file_with_diarization",
-            return_value=("Alice: hi", "en"),
+            return_value=("Alice: hi", "en", []),
         ):
             t = handle_media(
                 _args(input_path=str(media), language=None, diarize=True),
