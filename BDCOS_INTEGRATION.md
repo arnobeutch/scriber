@@ -11,6 +11,12 @@ install time via `UV_TORCH_BACKEND=cpu` (see `docs/BDCOS_INSTALL.md` +
 linux-x86_64, not torch-wheel baggage, so it stays in the base — the CPU wheel
 sheds the ~2.7 GB `nvidia/*` stack but not triton.
 
+> **Historical snapshot.** This is the original handoff note; the embedded
+> `pyproject.toml` excerpt is point-in-time (e.g. `diarize` is now
+> `pyannote-audio>=4.0`, and Windows pins a win32-only CUDA torch index). For
+> current dependency versions and install steps, `pyproject.toml` and
+> [docs/BDCOS_INSTALL.md](docs/BDCOS_INSTALL.md) are canonical.
+
 ---
 
 ## Why this note exists

@@ -83,8 +83,10 @@ summary's YAML frontmatter.
 | `constants.py` | Section schemas per mode (`MEETING_SECTION_*`, `SOURCE_SECTION_*`, combined `SECTION_KEYS/LABELS/HEADERS`), `FRONTMATTER_ONLY_KEYS`, polarity thresholds. | stdlib only |
 | `transcription/youtube_captions.py` | `yt-dlp` caption fetch; `CaptionTrack`; `TranscriptUnavailableError`. | `yt-dlp` |
 | `transcription/youtube_audio.py` | `yt-dlp` audio download, video-id extraction, metadata (title + chapters). Smart-caches `.wav`. | `yt-dlp`, `model` |
-| `transcription/local.py` | `ffmpeg → whisper` pipeline, pyannote diarization, in-process whisper model cache. | `whisper`, `pyannote`, `torchaudio`, `ffmpeg`, `tqdm` |
+| `transcription/local.py` | `ffmpeg → whisper` pipeline, language detection, in-process whisper model cache. **No pyannote/torchaudio imports** (kept off the base install). | `whisper`, `ffmpeg`, `tqdm` |
+| `transcription/diarize.py` | Speaker diarization (`diarize` extra). Transcribe-then-assign: whisper segments joined to pyannote speaker turns; GPU when available; in-memory waveform (torchcodec-free); non-speech filtering; speech-sampled language detection. Lazily imported. | `pyannote`, `torch`, `whisper` |
 | `transcription/preprocess.py` | Raw-transcript → `(speaker, text)` utterances; speaker-name resolution heuristic. | `unidecode` |
+| `primer.py` | `--suggest-primer` candidate extractor (proper nouns, acronyms, low-confidence words) + draft formatter. | stdlib only |
 | `summarizers/base.py` | `Summarizer` Protocol, `make_summarizer` factory, `analyze_sentiment`, `MissingAPIKeyError`. | `textblob`, stdlib |
 | `summarizers/modes.py` | `meeting` / `source` prompt templates, `get_prompt(mode, language, context)`, auto-detect heuristic. | stdlib only |
 | `summarizers/markdown.py` | `format_summary_markdown` (the structured-sections formatter), `extract_sections`, chapter deep-links. | `constants`, `model`, `logger` |
@@ -131,9 +133,11 @@ Rationale:
   instead, so the summary's frontmatter can tell "detected FR, summary
   forced to EN" apart from "detected EN, summary EN".
 - **`segments` and `chapters` are optional payloads**. `segments` is
-  whisper's per-cue list (empty for YT captions and diarized output,
-  since neither surfaces per-cue data the writer can use). `chapters`
-  is populated only when yt-dlp returns them.
+  whisper's per-cue list, populated for any whisper transcription
+  including diarized output (the diarize path returns the raw whisper
+  segments alongside the speaker-labelled text); empty only for YT
+  captions, which carry no per-cue data. `chapters` is populated only
+  when yt-dlp returns them.
 - **`source` is the provenance tag**. It's what lets the auto-mode
   detector distinguish a diarized whisper transcript (likely a meeting)
   from a caption track (almost never a meeting).
@@ -506,8 +510,11 @@ That single ordering applies to `output_dir`, `downloads_dir`,
 
 Target versions are pinned and checked:
 
-- **Python `==3.11.9`**. `openai-whisper`, `pyannote-audio`, and
-  `torchaudio` block 3.12+ today. Revisit when those lift.
+- **Python `>=3.11`** (3.11–3.14 verified). The old `==3.11.9` pin is
+  gone — modern `openai-whisper` / `numba` / `torch` / `pyannote-audio`
+  span 3.11–3.14. Diarization requires `pyannote-audio>=4.0` (3.x imports
+  `torchaudio.AudioMetaData`, removed in the `torchaudio>=2.11` needed for
+  3.14 wheels). Code stays 3.11-compatible (`ruff`/`pyright` target 3.11).
 - **`ruff` with `select = ["ALL"]`** plus an explicit ignore list in
   `pyproject.toml` (see `.claude/rules/python_strict.md` for rationale).
 - **`pyright` strict mode** (`[tool.pyright]` in `pyproject.toml`).

@@ -18,7 +18,7 @@ All near-term items cleared on 2026-04-24 — see the Completed log below.
 ## Deferred research (long-horizon)
 
 - **Near-realtime language-ID study ("Murmure").** Investigate how streaming speech-to-text products (the user cited "Murmure"/"Murmurme" — exact product TBC) achieve continuous, near-realtime language detection. Working hypothesis: a dedicated lightweight LID model run on a sliding window with temporal smoothing / majority voting, VAD-gated to speech. Goal: feed back into a more robust offline detector (and the multilingual work above). Spun off from the 2026-06-20 mis-detection.
-- **Python 3.12+/3.13 upgrade.** Current pin `==3.11.9` because `openai-whisper`, `pyannote-audio`, and `torchaudio` block newer Python. Review quarterly. If still blocked, evaluate:
+- **Drop-PyTorch / packaging track.** Python is already `>=3.11` (3.11–3.14 verified), so the old "blocked on newer Python" rationale is resolved. The remaining interest is dropping the PyTorch dependency (size, packaged-binary goal). Evaluate:
   - `faster-whisper` (SYSTRAN) — CTranslate2-based, no PyTorch, typically 4× faster on CPU, same model family. Drops PyTorch and unblocks Python 3.13.
   - `whisper.cpp` bindings (e.g. `pywhispercpp`) — ggml quantized; best fit for the packaged-binary goal below.
   - For diarization alternatives (pyannote pulls PyTorch): `simple-diarizer`, `speechbrain`, or making diarization an optional extra.

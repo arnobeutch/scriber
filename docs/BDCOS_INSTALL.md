@@ -56,10 +56,15 @@ identical — the whisper tuning in [WHISPER_SETUP.md](WHISPER_SETUP.md) stays
 valid. (`triton`, ~545 MB, is a direct openai-whisper dep on linux-x86_64, not
 GPU baggage — it stays on the CPU path.)
 
-scriber deliberately does **not** pin torch to a CPU index in its `pyproject.toml`:
-that would force CPU on every scriber user, including those who want GPU whisper.
-The CPU choice is made per-install via `UV_TORCH_BACKEND=cpu`, which is what the
-install script sets.
+scriber deliberately does **not** pin torch to a CPU index in its `pyproject.toml`
+on Linux/macOS: that would force CPU on every user, including those who want GPU
+whisper. The CPU choice is made per-install via `UV_TORCH_BACKEND=cpu`, which is
+what the install script sets — and this is unchanged for BDC OS.
+
+(`pyproject.toml` *does* pin a CUDA torch index, but only under a
+`sys_platform == 'win32'` marker — because PyPI ships CPU-only torch wheels for
+Windows, so Windows can't otherwise get a GPU build. That marker excludes Linux
+and macOS, so BDC OS's `UV_TORCH_BACKEND=cpu` resolution is unaffected.)
 
 > **uv version note:** `UV_TORCH_BACKEND` is honored by uv's resolver (tested on
 > uv 0.11). If a future uv ignores it for `uv tool install`, fall back to an
