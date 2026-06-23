@@ -17,6 +17,7 @@ import scriber.transcription.local as plt
 from scriber.transcription.diarize import (
     _MAX_ASSIGN_GAP,
     _SAMPLE_RATE,
+    _is_nonspeech_segment,
     assign_speakers_to_segments,
     decode_audio,
     detect_language_from_speech,
@@ -179,6 +180,40 @@ class TestAssignSpeakersToSegments:
     def test_skips_empty_text(self) -> None:
         segments = [{"start": 1.0, "end": 3.0, "text": "   "}]
         assert assign_speakers_to_segments(segments, self._turns()) == []
+
+    def test_drops_nonspeech_even_when_overlapping_a_turn(self) -> None:
+        # A repetitive credit-spam hallucination that overlaps SPEAKER_00's turn
+        # must still be dropped (it's not real speech).
+        segments = [
+            {"start": 1.0, "end": 3.0, "text": "Sous-titrage ST' 501", "compression_ratio": 6.0},
+            {"start": 2.0, "end": 4.0, "text": "vrai discours", "compression_ratio": 1.4},
+        ]
+        assert assign_speakers_to_segments(segments, self._turns()) == [("SPEAKER_00", "vrai discours")]
+
+
+class TestIsNonspeechSegment:
+    def test_normal_speech_kept(self) -> None:
+        seg = {"no_speech_prob": 0.02, "avg_logprob": -0.3, "compression_ratio": 1.6}
+        assert _is_nonspeech_segment(seg) is False
+
+    def test_silence_dropped(self) -> None:
+        # high no_speech AND low confidence → silence
+        seg = {"no_speech_prob": 0.85, "avg_logprob": -1.4, "compression_ratio": 1.1}
+        assert _is_nonspeech_segment(seg) is True
+
+    def test_high_nospeech_but_confident_kept(self) -> None:
+        # high no_speech alone (decoder still confident) is not enough to drop
+        seg = {"no_speech_prob": 0.85, "avg_logprob": -0.2, "compression_ratio": 1.1}
+        assert _is_nonspeech_segment(seg) is False
+
+    def test_repetitive_hallucination_dropped(self) -> None:
+        # credit spam / looping lyrics: confident decode but text too repetitive
+        seg = {"no_speech_prob": 0.05, "avg_logprob": -0.2, "compression_ratio": 5.0}
+        assert _is_nonspeech_segment(seg) is True
+
+    def test_bare_segment_defaults_to_speech(self) -> None:
+        # dicts without whisper's quality fields must never be filtered
+        assert _is_nonspeech_segment({"start": 0.0, "end": 1.0, "text": "hi"}) is False
 
 
 class TestFormatDiarized:

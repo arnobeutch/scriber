@@ -44,6 +44,15 @@ _SAMPLE_RATE: int = 16000  # whisper.load_audio always returns mono PCM at 16 kH
 _LID_MAX_WINDOWS: int = 6  # max speech windows to sample for language detection
 _LID_WINDOW_SEC: float = 30.0  # whisper scores at most 30s per window
 
+# Non-speech filter (drop whisper hallucinations over music/silence/credits).
+# Whisper emits per-segment quality signals; a segment is non-speech when whisper
+# is confident it's silence (high no_speech_prob *and* low avg_logprob) or when
+# its text is too repetitive to be real (high compression_ratio — e.g. looping
+# "Sous-titrage ST' 501" credits, or song lyrics during a musical interlude).
+_NO_SPEECH_PROB_MAX: float = 0.6  # whisper's own no_speech_threshold default
+_AVG_LOGPROB_MIN: float = -1.0  # whisper's own logprob_threshold default
+_COMPRESSION_RATIO_MAX: float = 2.4  # whisper's own compression_ratio_threshold default
+
 
 def decode_audio(audio_file: str) -> npt.NDArray[np.float32]:
     """Decode `audio_file` to a mono float32 array at 16 kHz via whisper's ffmpeg loader.
@@ -210,6 +219,21 @@ def _best_speaker(start: float, end: float, speaker_turns: list[tuple[str, Segme
     return None
 
 
+def _is_nonspeech_segment(seg: dict[str, Any]) -> bool:
+    """Whether `seg` is whisper hallucinating over non-speech (music/silence/credits).
+
+    Uses whisper's own per-segment signals (absent fields default to
+    speech-like values, so callers passing bare ``{start, end, text}`` dicts are
+    never filtered).
+    """
+    no_speech = float(seg.get("no_speech_prob", 0.0))
+    avg_logprob = float(seg.get("avg_logprob", 0.0))
+    compression = float(seg.get("compression_ratio", 0.0))
+    silent = no_speech >= _NO_SPEECH_PROB_MAX and avg_logprob <= _AVG_LOGPROB_MIN
+    repetitive = compression >= _COMPRESSION_RATIO_MAX
+    return silent or repetitive
+
+
 def assign_speakers_to_segments(
     segments: list[dict[str, Any]],
     speaker_turns: list[tuple[str, Segment]],
@@ -217,19 +241,29 @@ def assign_speakers_to_segments(
     """Label each whisper segment with the speaker whose turn it overlaps.
 
     This is the "transcribe-then-assign" join: one full whisper pass produces
-    ``segments`` (with ``start`` / ``end`` / ``text``), which we map onto the
-    diarization ``speaker_turns``. Segments with no nearby turn (music, silence)
-    are dropped. Returns ``(speaker, text)`` pairs in transcript order.
+    ``segments`` (with ``start`` / ``end`` / ``text`` + quality signals), which we
+    map onto the diarization ``speaker_turns``. Segments whisper flags as
+    non-speech (``_is_nonspeech_segment``) or that land near no turn are dropped.
+    Returns ``(speaker, text)`` pairs in transcript order.
     """
     labeled: list[tuple[str, str]] = []
+    dropped_nonspeech = 0
     for seg in segments:
         text = str(seg.get("text", "")).strip()
         if not text:
+            continue
+        if _is_nonspeech_segment(seg):
+            dropped_nonspeech += 1
             continue
         speaker = _best_speaker(float(seg["start"]), float(seg["end"]), speaker_turns)
         if speaker is None:
             continue
         labeled.append((speaker, text))
+    if dropped_nonspeech:
+        my_logger.info(
+            f"Dropped {dropped_nonspeech} non-speech segment(s) "
+            "(music / silence / repetitive credits)",
+        )
     return labeled
 
 
