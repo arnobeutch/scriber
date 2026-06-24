@@ -16,7 +16,7 @@ from __future__ import annotations
 import re
 from collections import Counter
 from dataclasses import dataclass
-from typing import Any
+from typing import Any, cast
 
 # Letter-runs (Unicode-aware, no digits/underscore), allowing internal apostrophe
 # (straight or curly — whisper emits curly in French) or hyphen so
@@ -30,17 +30,109 @@ _EDGE_PUNCT_RE = re.compile(r"^[\W_]+|[\W_]+$")
 # connectors (FR + EN, for mixed-language sources). Compared lower-cased.
 _STOPWORDS: frozenset[str] = frozenset(
     {
-        "le", "la", "les", "l", "un", "une", "des", "de", "du", "d", "et", "ou",
-        "mais", "donc", "or", "car", "ni", "alors", "ainsi", "puis", "ensuite",
-        "enfin", "bref", "voila", "voilà", "je", "tu", "il", "elle", "on", "nous",
-        "vous", "ils", "elles", "ce", "cet", "cette", "ces", "mon", "ma", "mes",
-        "ton", "ta", "tes", "son", "sa", "ses", "notre", "nos", "votre", "vos",
-        "leur", "leurs", "qui", "que", "quoi", "dont", "quand", "comment",
-        "pourquoi", "si", "oui", "non", "bonjour", "bonsoir", "merci", "salut",
-        "madame", "monsieur", "messieurs", "mesdames", "aussi", "comme", "très",
-        "plus", "moins", "bien", "the", "a", "an", "and", "but", "so",
-        "yes", "no", "hello", "hi", "thanks", "thank", "i", "we", "you", "they",
-        "he", "she", "it", "this", "that", "these", "those", "well", "okay", "ok",
+        "le",
+        "la",
+        "les",
+        "l",
+        "un",
+        "une",
+        "des",
+        "de",
+        "du",
+        "d",
+        "et",
+        "ou",
+        "mais",
+        "donc",
+        "or",
+        "car",
+        "ni",
+        "alors",
+        "ainsi",
+        "puis",
+        "ensuite",
+        "enfin",
+        "bref",
+        "voila",
+        "voilà",
+        "je",
+        "tu",
+        "il",
+        "elle",
+        "on",
+        "nous",
+        "vous",
+        "ils",
+        "elles",
+        "ce",
+        "cet",
+        "cette",
+        "ces",
+        "mon",
+        "ma",
+        "mes",
+        "ton",
+        "ta",
+        "tes",
+        "son",
+        "sa",
+        "ses",
+        "notre",
+        "nos",
+        "votre",
+        "vos",
+        "leur",
+        "leurs",
+        "qui",
+        "que",
+        "quoi",
+        "dont",
+        "quand",
+        "comment",
+        "pourquoi",
+        "si",
+        "oui",
+        "non",
+        "bonjour",
+        "bonsoir",
+        "merci",
+        "salut",
+        "madame",
+        "monsieur",
+        "messieurs",
+        "mesdames",
+        "aussi",
+        "comme",
+        "très",
+        "plus",
+        "moins",
+        "bien",
+        "the",
+        "a",
+        "an",
+        "and",
+        "but",
+        "so",
+        "yes",
+        "no",
+        "hello",
+        "hi",
+        "thanks",
+        "thank",
+        "i",
+        "we",
+        "you",
+        "they",
+        "he",
+        "she",
+        "it",
+        "this",
+        "that",
+        "these",
+        "those",
+        "well",
+        "okay",
+        "ok",
     },
 )
 
@@ -91,10 +183,11 @@ def _low_confidence_words(
     """Words whisper scored below `threshold`, keyed to their lowest probability."""
     best: dict[str, float] = {}
     for seg in segments:
-        words = seg.get("words") or []
+        words = cast(list[Any], seg.get("words") or [])
         for word in words:
-            token = _EDGE_PUNCT_RE.sub("", str(word.get("word", "")).strip())
-            prob = float(word.get("probability", 1.0))
+            wd = cast(dict[str, Any], word)
+            token = _EDGE_PUNCT_RE.sub("", str(wd.get("word", "")).strip())
+            prob = float(wd.get("probability", 1.0))
             # A primer wants uncertain *names/terms*, not common words whisper
             # happened to score low — drop stopwords and short tokens.
             if len(token) < _MIN_LOWCONF_LEN or prob >= threshold or token.lower() in _STOPWORDS:

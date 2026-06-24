@@ -15,7 +15,7 @@ from __future__ import annotations
 import argparse
 from dataclasses import replace
 from pathlib import Path
-from typing import Any, cast
+from typing import cast
 
 from langdetect import LangDetectException, detect
 
@@ -312,7 +312,7 @@ def write_primer_draft(transcript: Transcript, settings: Settings) -> Path | Non
             "(cached transcript or YT captions) — skipping primer draft.",
         )
         return None
-    candidates = extract_primer_candidates(cast("list[dict[str, Any]]", transcript.segments))
+    candidates = extract_primer_candidates(transcript.segments)
     draft = format_primer_draft(candidates, transcript.title)
     p = settings.output_dir / f"{transcript.title} primer.draft.txt"
     p.parent.mkdir(parents=True, exist_ok=True)

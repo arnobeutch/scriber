@@ -1,3 +1,4 @@
+# pyright: reportUnknownVariableType=false
 """Opt-in integration test for the diarized French pipeline.
 
 Skipped by default (see ``addopts`` in ``pyproject.toml``). Run with:

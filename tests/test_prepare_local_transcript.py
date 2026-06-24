@@ -188,7 +188,9 @@ class TestAssignSpeakersToSegments:
             {"start": 1.0, "end": 3.0, "text": "Sous-titrage ST' 501", "compression_ratio": 6.0},
             {"start": 2.0, "end": 4.0, "text": "vrai discours", "compression_ratio": 1.4},
         ]
-        assert assign_speakers_to_segments(segments, self._turns()) == [("SPEAKER_00", "vrai discours")]
+        assert assign_speakers_to_segments(segments, self._turns()) == [
+            ("SPEAKER_00", "vrai discours")
+        ]
 
 
 class TestIsNonspeechSegment:

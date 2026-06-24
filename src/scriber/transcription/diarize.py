@@ -108,7 +108,7 @@ def diarize_speakers(
     # model's device internally, so the CPU waveform below needs no move.
     device = get_device()
     if device == "cuda":
-        cast(Any, pipeline).to(torch.device("cuda"))
+        pipeline.to(torch.device("cuda"))
     my_logger.info(f"\tDiarization device: {device}")
     # Feed an in-memory (channel, time) waveform so pyannote skips torchcodec
     # decoding (see pyannote.audio.core.io.Audio.validate_file). ascontiguousarray
