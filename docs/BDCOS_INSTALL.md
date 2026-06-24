@@ -14,6 +14,23 @@ scriber is consumed as an **isolated `uv` tool installed from GitHub**. It is
 **not** assumed to be checked out locally; the install pulls it from its git
 remote into its own environment.
 
+## Prerequisites
+
+These must be present on the BDC OS host **before** installing scriber. They are
+not pulled by the install — fold them into BDC OS's general prerequisites list
+(canonical copy in the bdc_os repo), don't leave them implicit here.
+
+| Prereq | Why | Scope |
+| --- | --- | --- |
+| **`uv`** | Installs and runs scriber as an isolated tool. | always |
+| **Python 3.11–3.13** | scriber pins `requires-python = ">=3.11,<3.14"` (3.14 deferred — `tiktoken` and the summarize chain lack cp314 wheels). uv normally provisions a managed interpreter in range; a **system-only 3.14** environment fails to resolve. | always |
+| **`ffmpeg`** (system binary) | whisper decodes audio through it via `ffmpeg-python`; no wheel ships it. Missing `ffmpeg` installs fine, then fails at first transcription. | always |
+| **`HUGGINGFACE_TOKEN`** + access to the gated model `pyannote/speaker-diarization-community-1` | pyannote 4.x diarization pipeline is gated. | `--diarize` only |
+
+The HF token is a *runtime* prereq exported into scriber's process env by the
+caller (see [Diarization needs a Hugging Face token](#diarization-needs-a-hugging-face-token-and-model-access));
+the rest are *install-time*.
+
 ## TL;DR
 
 ```bash
