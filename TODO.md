@@ -18,7 +18,7 @@ All near-term items cleared on 2026-04-24 — see the Completed log below.
 ## Deferred research (long-horizon)
 
 - **Near-realtime language-ID study ("Murmure").** Investigate how streaming speech-to-text products (the user cited "Murmure"/"Murmurme" — exact product TBC) achieve continuous, near-realtime language detection. Working hypothesis: a dedicated lightweight LID model run on a sliding window with temporal smoothing / majority voting, VAD-gated to speech. Goal: feed back into a more robust offline detector (and the multilingual work above). Spun off from the 2026-06-20 mis-detection.
-- **Drop-PyTorch / packaging track.** Python is already `>=3.11` (3.11–3.14 verified), so the old "blocked on newer Python" rationale is resolved. The remaining interest is dropping the PyTorch dependency (size, packaged-binary goal). Evaluate:
+- **Drop-PyTorch / packaging track.** Python is `>=3.11,<3.14` (3.11–3.13; 3.14 deferred — see the 2026-06-24 Completed entry), so the old "blocked on newer Python" rationale is resolved. The remaining interest is dropping the PyTorch dependency (size, packaged-binary goal). Evaluate:
   - `faster-whisper` (SYSTRAN) — CTranslate2-based, no PyTorch, typically 4× faster on CPU, same model family. Drops PyTorch and unblocks Python 3.13.
   - `whisper.cpp` bindings (e.g. `pywhispercpp`) — ggml quantized; best fit for the packaged-binary goal below.
   - For diarization alternatives (pyannote pulls PyTorch): `simple-diarizer`, `speechbrain`, or making diarization an optional extra.
@@ -43,6 +43,7 @@ All near-term items cleared on 2026-04-24 — see the Completed log below.
 
 ## Completed
 
+- 2026-06-24 — **Capped `requires-python = ">=3.11,<3.14"`; deferred 3.14.** 3.14 was assumed to be a dependency constraint but never actually required. The `summarize` extra's `chromadb → uvicorn[standard]` chain (`onnxruntime` 1.22, `watchfiles` 1.0.5) and base `tiktoken` 0.9 ship no cp314 wheels, so no clean `uv sync --all-extras` on 3.14 ever passed. Capping the upper bound drops the 3.14 lock forks (no package up/downgrades; numba stays 0.65.1), keeping 3.11–3.13 — incl. `summarize` — installable off-the-shelf. Validated `uv sync --all-extras` on 3.11/3.12/3.13. Docs corrected (`CLAUDE.md`, `docs/DESIGN.md`, pyproject comments). Re-open by relaxing the cap + targeted `--upgrade-package onnxruntime tiktoken watchfiles` once those cp314 wheels land.
 - 2026-04-24 — **Batch-mode resilience.** `--continue-on-error` flag + post-run ✓/✗ summary table; non-zero exit when any input failed so CI surfaces failures.
 - 2026-04-24 — **Streaming LLM output.** OpenAI/OpenRouter backend uses `stream=True`; tokens echo to stdout as they generate (long summaries no longer look frozen).
 - 2026-04-24 — **Progress bar** during whisper transcription (`verbose=False`) and yt-dlp audio download (native progress line re-enabled). Diarized path wraps the per-segment loop in tqdm.

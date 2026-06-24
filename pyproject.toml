@@ -10,7 +10,7 @@ name = "scriber"
 version = "0.1.0"
 description = "Transcribe and summarize YouTube videos, local media, or existing transcripts."
 readme = "README.md"
-requires-python = ">=3.11"
+requires-python = ">=3.11,<3.14"  # 2026-06-24: 3.14 deferred — summarize chain (chromadb/uvicorn → onnxruntime, watchfiles) + base tiktoken lack cp314 wheels
 dependencies = [                       # transcription-only base (whisper + ffmpeg + yt-dlp)
     "bs4>=0.0.2",
     "colorama>=0.4.6",
@@ -32,8 +32,8 @@ dependencies = [                       # transcription-only base (whisper + ffmp
 [project.optional-dependencies]
 # Speaker diarization (pyannote is a torch app; needs HUGGINGFACE_TOKEN at runtime).
 diarize = [
-    # pyannote 4.x is required: torchaudio >=2.11 (needed for cp314 / Python 3.14
-    # wheels) removed torchaudio.AudioMetaData, which every pyannote 3.x imports.
+    # pyannote 4.x is required: torchaudio 2.11 removed torchaudio.AudioMetaData,
+    # which every pyannote 3.x imports, so 3.x can't run on modern torchaudio.
     # 4.x targets the new torchaudio/torchcodec audio backend. 2026-06-03.
     "pyannote-audio>=4.0",
     "torchaudio>=2.6.0",

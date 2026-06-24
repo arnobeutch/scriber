@@ -510,11 +510,11 @@ That single ordering applies to `output_dir`, `downloads_dir`,
 
 Target versions are pinned and checked:
 
-- **Python `>=3.11`** (3.11–3.14 verified). The old `==3.11.9` pin is
-  gone — modern `openai-whisper` / `numba` / `torch` / `pyannote-audio`
-  span 3.11–3.14. Diarization requires `pyannote-audio>=4.0` (3.x imports
-  `torchaudio.AudioMetaData`, removed in the `torchaudio>=2.11` needed for
-  3.14 wheels). Code stays 3.11-compatible (`ruff`/`pyright` target 3.11).
+- **Python `>=3.11,<3.14`** (3.11–3.13). 3.14 deferred — `summarize`'s
+  chromadb/uvicorn chain (`onnxruntime`, `watchfiles`) + base `tiktoken`
+  lack cp314 wheels. The old `==3.11.9` pin is gone. Diarization requires
+  `pyannote-audio>=4.0` (3.x imports `torchaudio.AudioMetaData`, removed in
+  `torchaudio>=2.11`). Code stays 3.11-compatible (`ruff`/`pyright` target 3.11).
 - **`ruff` with `select = ["ALL"]`** plus an explicit ignore list in
   `pyproject.toml` (see `.claude/rules/python_strict.md` for rationale).
 - **`pyright` strict mode** (`[tool.pyright]` in `pyproject.toml`).

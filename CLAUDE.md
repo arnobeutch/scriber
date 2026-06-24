@@ -6,7 +6,7 @@ CLI tool to transcribe and summarize YouTube videos, local audio/video files, or
 
 ## Tech stack
 
-- Python `>=3.11` (3.11–3.14 verified: resolve + cp314 wheels + live import on 3.14.5). The old `==3.11.9` pin is gone — modern `openai-whisper` / `numba` / `torch` / `pyannote-audio` all span 3.11–3.14. **Diarization requires `pyannote-audio>=4.0`**: `torchaudio>=2.11` (needed for 3.14 wheels) removed `torchaudio.AudioMetaData`, which every pyannote 3.x imports — so 3.x and 3.14 are mutually exclusive. pyannote 4.x uses `token=` (not `use_auth_token=`) and the torchcodec audio backend.
+- Python `>=3.11,<3.14` (3.11–3.13; 3.11.9 verified clean, 368 tests). 3.14 is deferred: the `summarize` extra's `chromadb → uvicorn[standard]` chain (`onnxruntime`, `watchfiles`) and base `tiktoken` ship no cp314 wheels yet. The old `==3.11.9` pin is gone. **Diarization requires `pyannote-audio>=4.0`** (4.x dropped the `torchaudio.AudioMetaData` that pyannote 3.x imports → needs the new torchaudio/torchcodec backend); uses `token=` (not `use_auth_token=`).
 - `uv` for dependency/env management.
 - `ruff` lint (`select = ["ALL"]`; ignores in `pyproject.toml`, `target-version = "py311"` — the supported floor; keep code 3.11-compatible).
 - `pyright` strict mode (`[tool.pyright]` in `pyproject.toml`, `pythonVersion = "3.11"` — type-check against the oldest supported Python) — matches VSCode Pylance.
