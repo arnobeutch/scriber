@@ -216,25 +216,53 @@ def extract_primer_candidates(
     )
 
 
-def format_primer_draft(candidates: PrimerCandidates, title: str) -> str:
+def _carried_terms(carried_primer: str) -> set[str]:
+    """Lowercased word tokens already present in a carried-over primer."""
+    return {tok.lower() for tok in _WORD_RE.findall(carried_primer)}
+
+
+def format_primer_draft(
+    candidates: PrimerCandidates,
+    title: str,
+    carried_primer: str | None = None,
+) -> str:
     """Render a reviewable primer draft.
 
     Proper nouns + acronyms are written as active (uncommented) primer content;
     low-confidence words are ``#`` comments (they may be misspelled, so the user
     decides whether to add a corrected form). ``#`` lines are stripped when the
     file is loaded as a primer, so the draft is usable as-is after trimming.
+
+    When ``carried_primer`` is given (the ``#``-stripped text of a primer fed in
+    via ``--initial-prompt-file``), it is preserved verbatim as active content
+    and any newly-harvested term already present in it is dropped — so a primer
+    accumulates proper nouns / jargon across a series of related recordings
+    instead of each draft starting from scratch.
     """
+    seen = _carried_terms(carried_primer) if carried_primer else set[str]()
+    proper = [term for term, _ in candidates.proper_nouns if term.lower() not in seen]
+    acronyms = [term for term, _ in candidates.acronyms if term.lower() not in seen]
+    proper_heading = "New proper nouns / names" if carried_primer else "Proper nouns / names"
+    acronym_heading = "New acronyms" if carried_primer else "Acronyms"
     lines: list[str] = [
         f'# Auto-suggested primer for "{title}".',
         "# Review before use: fix spellings, delete noise, keep real proper nouns / jargon.",
         "# '#' lines are ignored when this file is passed to --initial-prompt-file,",
         "# so you can keep these notes inline. See docs/WHISPER_SETUP.md.",
+    ]
+    if carried_primer:
+        lines += [
+            "#",
+            "# --- Carried over from previous primer ---",
+            carried_primer.strip(),
+        ]
+    lines += [
         "#",
-        "# --- Proper nouns / names (by frequency) ---",
-        ", ".join(term for term, _ in candidates.proper_nouns) or "# (none detected)",
+        f"# --- {proper_heading} (by frequency) ---",
+        ", ".join(proper) or "# (none detected)",
         "#",
-        "# --- Acronyms ---",
-        ", ".join(term for term, _ in candidates.acronyms) or "# (none detected)",
+        f"# --- {acronym_heading} ---",
+        ", ".join(acronyms) or "# (none detected)",
     ]
     if candidates.low_confidence:
         lines += [

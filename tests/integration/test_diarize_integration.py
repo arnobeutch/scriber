@@ -1,4 +1,6 @@
 # pyright: reportUnknownVariableType=false
+# langdetect's public `detect` is annotated but returns Unknown (same boundary
+# handled with this header in scriber.handlers).
 """Opt-in integration test for the diarized French pipeline.
 
 Skipped by default (see ``addopts`` in ``pyproject.toml``). Run with:

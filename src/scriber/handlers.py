@@ -303,6 +303,12 @@ def write_primer_draft(transcript: Transcript, settings: Settings) -> Path | Non
     Returns the draft path, or ``None`` when there are no segments to harvest
     (e.g. a cached transcript or YT-caption source). Review and trim the draft,
     then feed it back via ``--initial-prompt-file`` for a consolidation pass.
+
+    When a primer was supplied via ``--initial-prompt-file`` (in
+    ``settings.initial_prompt``), it is carried into the new draft and its terms
+    are de-duplicated against the fresh harvest, so running ``--initial-prompt-file
+    OLD --suggest-primer`` yields ``OLD`` + newly-found terms — a primer that
+    accumulates context from one recording to the next.
     """
     from scriber.primer import extract_primer_candidates, format_primer_draft
 
@@ -313,7 +319,12 @@ def write_primer_draft(transcript: Transcript, settings: Settings) -> Path | Non
         )
         return None
     candidates = extract_primer_candidates(transcript.segments)
-    draft = format_primer_draft(candidates, transcript.title)
+    # Carry an incoming primer (--initial-prompt-file) forward so its curated
+    # terms survive and the draft accumulates across related recordings, rather
+    # than each run harvesting from scratch.
+    draft = format_primer_draft(
+        candidates, transcript.title, carried_primer=settings.initial_prompt
+    )
     p = settings.output_dir / f"{transcript.title} primer.draft.txt"
     p.parent.mkdir(parents=True, exist_ok=True)
     p.write_text(draft, encoding="utf-8")

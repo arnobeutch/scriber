@@ -75,3 +75,32 @@ class TestFormatPrimerDraft:
         assert "Wienerberger" in body
         assert "RAL" in body
         assert "Culmi" not in body  # the low-confidence comment was stripped
+
+    def test_carried_primer_preserved_and_deduped(self) -> None:
+        # A primer fed via --initial-prompt-file is carried into the new draft;
+        # its terms survive and newly-harvested duplicates are dropped.
+        c = PrimerCandidates(
+            proper_nouns=[("Flashnet", 3), ("RecolX", 2)],
+            acronyms=[("RAL", 1)],
+            low_confidence=[],
+        )
+        carried = "Flashnet, Jacques Letzelter"
+        out = format_primer_draft(c, "Call 2", carried_primer=carried)
+        body = "\n".join(
+            line for line in out.splitlines() if not line.lstrip().startswith("#")
+        ).strip()
+        assert "Flashnet, Jacques Letzelter" in body  # carried block preserved verbatim
+        assert "RecolX" in body  # new term added
+        assert "RAL" in body
+        # Flashnet already carried → not repeated in the "New proper nouns" line.
+        assert body.count("Flashnet") == 1
+
+    def test_no_carried_primer_keeps_original_headings(self) -> None:
+        c = PrimerCandidates(
+            proper_nouns=[("Wienerberger", 1)],
+            acronyms=[],
+            low_confidence=[],
+        )
+        out = format_primer_draft(c, "T")
+        assert "Carried over from previous primer" not in out
+        assert "# --- Proper nouns / names (by frequency) ---" in out
