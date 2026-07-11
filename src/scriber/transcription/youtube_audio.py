@@ -85,6 +85,7 @@ def fetch_video_metadata(url: str) -> tuple[str, list[Chapter], SourceMetadata]:
         "no_warnings": True,
         "skip_download": True,
         "noprogress": True,
+        "extractor_args": {"youtube": {"player_client": ["default", "tv_simply"]}},
     }
     with yt_dlp.YoutubeDL(opts) as ydl:
         info = cast(dict[str, Any], ydl.extract_info(url, download=False))
@@ -145,6 +146,7 @@ def download_youtube_audio(
         "quiet": False,
         "no_warnings": True,
         "noprogress": False,
+        "extractor_args": {"youtube": {"player_client": ["default", "tv_simply"]}},
     }
     with yt_dlp.YoutubeDL(opts) as ydl:
         info = cast(dict[str, Any], ydl.extract_info(url, download=True))

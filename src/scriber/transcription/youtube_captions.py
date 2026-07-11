@@ -189,6 +189,7 @@ def get_youtube_transcript(video_id: str, requested_lang: str | None = None) -> 
             "quiet": True,
             "no_warnings": True,
             "noprogress": True,
+            "extractor_args": {"youtube": {"player_client": ["default", "tv_simply"]}},
         }
         try:
             with yt_dlp.YoutubeDL(info_opts) as ydl:
@@ -251,6 +252,7 @@ def get_youtube_transcript(video_id: str, requested_lang: str | None = None) -> 
             "quiet": True,
             "no_warnings": True,
             "noprogress": True,
+            "extractor_args": {"youtube": {"player_client": ["default", "tv_simply"]}},
         }
         try:
             with yt_dlp.YoutubeDL(dl_opts) as ydl:
