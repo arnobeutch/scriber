@@ -43,6 +43,7 @@ handlers:
     level: DEBUG
     formatter: detailed
     filename: logs/scriber.log
+    encoding: utf-8
     maxBytes: 100000
     backupCount: 3
   # Structured JSON logging — opt in by uncommenting `- json_file` under root.handlers below.
@@ -52,6 +53,7 @@ handlers:
     level: DEBUG
     formatter: json
     filename: logs/scriber.jsonl
+    encoding: utf-8
     maxBytes: 100000
     backupCount: 3
     delay: true

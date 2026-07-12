@@ -3,6 +3,7 @@
 import argparse
 import copy
 import datetime as dt
+import io
 import json
 import logging
 import logging.config
@@ -143,8 +144,23 @@ class NonErrorFilter(logging.Filter):
         return record.levelno <= logging.INFO
 
 
+def _force_utf8_console() -> None:
+    """Make console logging UTF-8 safe.
+
+    Windows consoles default to cp1252, which can't encode the ✓/✗ marks and
+    em-dash used in log messages (raising UnicodeEncodeError inside
+    ``logging.Handler.emit`` — the batch summary then never prints). Switch
+    stdout/stderr to UTF-8 with ``backslashreplace`` so non-cp1252 glyphs never
+    crash a handler; a no-op on already-UTF-8 platforms.
+    """
+    for stream in (sys.stdout, sys.stderr):
+        if isinstance(stream, io.TextIOWrapper):
+            stream.reconfigure(encoding="utf-8", errors="backslashreplace")
+
+
 def setup_logger() -> None:
     """Configure the logger from YAML config file."""
+    _force_utf8_console()
     Path("logs").mkdir(exist_ok=True)
     with _CONFIG_PATH.open() as f_in:
         config: Any = yaml.safe_load(f_in)
