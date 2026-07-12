@@ -23,9 +23,14 @@ from pathlib import Path
 from typing import Any, Literal, cast
 
 import yt_dlp
+from langdetect import DetectorFactory, LangDetectException, detect
 from yt_dlp.utils import DownloadError
 
 from scriber.logger import my_logger
+
+# Deterministic language detection: langdetect is randomised per-process by
+# default, which would make caption-language selection non-reproducible.
+DetectorFactory.seed = 0
 
 CaptionKind = Literal["manual", "auto"]
 
@@ -38,11 +43,11 @@ class CaptionTrack:
     lang: str
     kind: CaptionKind
     declared_language: str | None = None
-    """Uploader-declared video language from yt-dlp's ``info["language"]``
-    (normalised to a 2-letter code). When the user did not pass
-    ``--language``, the caller treats this as the implicit requested
-    language so the caption ladder doesn't fall through to manual EN on
-    a non-English video that happens to ship English subtitles."""
+    """Implicit language for the video: yt-dlp's ``info["language"]`` (normalised
+    to a 2-letter code) when present, else the language detected from the title +
+    description. When the user did not pass ``--language``, the caller treats this
+    as the implicit requested language so the caption ladder doesn't fall through
+    to manual EN on a non-English video that happens to ship English subtitles."""
 
 
 class TranscriptUnavailableError(Exception):
@@ -73,6 +78,27 @@ def _match_lang_key(tracks: dict[str, Any], lang: str) -> str | None:
         return lang
     prefix = lang + "-"
     return next((k for k in tracks if k.startswith(prefix)), None)
+
+
+def _detect_content_language(info: dict[str, Any]) -> str | None:
+    """Best-effort spoken-language guess from the video's title + description.
+
+    Used only when yt-dlp reports no ``info["language"]``: some videos declare
+    no original language yet ship *manual* tracks in many languages (incl.
+    English) — e.g. professionally multi-subtitled documentaries — which would
+    make the ladder default to manual English on a non-English video. Detecting
+    from the title + description recovers the real language so the picker can
+    prefer the matching manual track. Returns a 2-letter code or ``None``.
+    """
+    text = "\n".join(
+        part for part in (str(info.get("title") or ""), str(info.get("description") or "")) if part
+    ).strip()
+    if not text:
+        return None
+    try:
+        return cast(str, detect(text))
+    except LangDetectException:
+        return None
 
 
 def _pick_caption(
@@ -218,13 +244,24 @@ def get_youtube_transcript(video_id: str, requested_lang: str | None = None) -> 
         if isinstance(declared_raw, str) and declared_raw.strip():
             declared_lang = declared_raw.strip().split("-")[0]
 
-        # When the user didn't pass --language, use the declared language as
-        # the implicit preference so the ladder prefers manual @ declared over
-        # the manual-English fallback. Explicit --language always wins.
-        effective_lang = requested_lang or declared_lang
-        if effective_lang and effective_lang != requested_lang:
+        # When yt-dlp declares no language, recover it from the title +
+        # description. Without this, a multi-subtitled French video (manual
+        # EN + FR, no declared language) falls through to the manual-English
+        # fallback and is mislabelled English. Only when the user gave no
+        # --language (explicit request always wins) and nothing was declared.
+        content_lang: str | None = None
+        if requested_lang is None and declared_lang is None:
+            content_lang = _detect_content_language(info)
+
+        # Implicit preference when the user didn't pass --language: the declared
+        # language, else the content-detected one. The ladder then prefers a
+        # manual track in that language over the manual-English fallback.
+        implicit_lang = declared_lang or content_lang
+        effective_lang = requested_lang or implicit_lang
+        if implicit_lang and requested_lang is None:
+            source = "declared" if declared_lang else "content-detected"
             my_logger.info(
-                f"No --language set; using declared language '{declared_lang}' "
+                f"No --language set; using {source} language '{implicit_lang}' "
                 "as the implicit preference.",
             )
 
@@ -279,4 +316,4 @@ def get_youtube_transcript(video_id: str, requested_lang: str | None = None) -> 
         )
 
     wrapped = textwrap.fill(text, width=80, break_long_words=False, break_on_hyphens=False)
-    return CaptionTrack(text=wrapped, lang=lang, kind=kind, declared_language=declared_lang)
+    return CaptionTrack(text=wrapped, lang=lang, kind=kind, declared_language=implicit_lang)

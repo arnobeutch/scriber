@@ -235,6 +235,42 @@ class TestGetYoutubeTranscript:
         assert track.kind == "manual"
         assert track.declared_language == "fr"
 
+    def test_content_language_detected_when_declaration_absent(self) -> None:
+        # Regression for the "Les Alpes" case: a French documentary with manual
+        # EN+FR subs but NO info["language"]. Without content detection the
+        # ladder defaults to manual EN and mislabels the video English; with it,
+        # the title/description reveal French and we prefer manual FR.
+        info: dict[str, Any] = {
+            "id": "abc",
+            "title": "Les Alpes - Des glaciers aux stations : la grande transformation alpine",
+            "description": (
+                "Un documentaire sur la transformation des montagnes alpines, "
+                "des glaciers millénaires aux stations de ski contemporaines."
+            ),
+            "subtitles": {"en": [{}], "fr": [{}]},
+            "automatic_captions": {},
+        }
+        ydl = _ydl_returning(info, write_files={"abc.fr.srt": _SAMPLE_SRT})
+        with patch("scriber.transcription.youtube_captions.yt_dlp.YoutubeDL", ydl):
+            track = get_youtube_transcript("abc")  # no requested_lang
+        assert track.lang == "fr"
+        assert track.kind == "manual"
+        assert track.declared_language == "fr"
+
+    def test_explicit_request_skips_content_detection(self) -> None:
+        # --language en against a French-content video (no declared language)
+        # must still pick EN — explicit request wins, detection is skipped.
+        info: dict[str, Any] = {
+            "id": "abc",
+            "title": "Les Alpes : documentaire sur les glaciers alpins",
+            "subtitles": {"en": [{}], "fr": [{}]},
+            "automatic_captions": {},
+        }
+        ydl = _ydl_returning(info, write_files={"abc.en.srt": _SAMPLE_SRT})
+        with patch("scriber.transcription.youtube_captions.yt_dlp.YoutubeDL", ydl):
+            track = get_youtube_transcript("abc", requested_lang="en")
+        assert track.lang == "en"
+
     def test_explicit_request_overrides_declared(self) -> None:
         # --language en against a declared-fr video should still pick EN.
         info: dict[str, Any] = {
