@@ -97,7 +97,13 @@ def _maybe_prompt_for_initial_prompt(
         "transcription of brand-name-dense content.\n"
         "See docs/WHISPER_SETUP.md for what to put in it.\n\n",
     )
-    answer = input("Enter primer file path, or press Enter to skip: ").strip()
+    try:
+        answer = input("Enter primer file path, or press Enter to skip: ").strip()
+    except EOFError:
+        # stdin reports as a TTY but has no readable input (piped/redirected
+        # runs, some Windows shells) — treat as "skip" instead of crashing.
+        my_logger.info("No interactive input available; proceeding without a primer.")
+        return settings
     if not answer:
         return settings
     loaded = load_text_file(Path(answer))
