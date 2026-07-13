@@ -80,15 +80,23 @@ def _match_lang_key(tracks: dict[str, Any], lang: str) -> str | None:
     return next((k for k in tracks if k.startswith(prefix)), None)
 
 
+def _has_caption(info: dict[str, Any], lang: str) -> bool:
+    """Whether `info` exposes a manual or automatic caption track for `lang`."""
+    subtitles = cast(dict[str, Any], info.get("subtitles") or {})
+    auto = cast(dict[str, Any], info.get("automatic_captions") or {})
+    return _match_lang_key(subtitles, lang) is not None or _match_lang_key(auto, lang) is not None
+
+
 def _detect_content_language(info: dict[str, Any]) -> str | None:
     """Best-effort spoken-language guess from the video's title + description.
 
-    Used only when yt-dlp reports no ``info["language"]``: some videos declare
-    no original language yet ship *manual* tracks in many languages (incl.
-    English) — e.g. professionally multi-subtitled documentaries — which would
-    make the ladder default to manual English on a non-English video. Detecting
-    from the title + description recovers the real language so the picker can
-    prefer the matching manual track. Returns a 2-letter code or ``None``.
+    yt-dlp's declared ``info["language"]`` is unreliable — it is frequently
+    absent (multi-subtitled videos declare no original language) and sometimes
+    plain wrong (e.g. a French ARTE upload declared ``"en"``). Both cases send
+    the caption ladder to the English track on a non-English video. The title +
+    description are the most direct evidence of the spoken language, so we detect
+    from them and let the result take precedence over the declared language.
+    Returns a 2-letter code or ``None``.
     """
     text = "\n".join(
         part for part in (str(info.get("title") or ""), str(info.get("description") or "")) if part
@@ -244,22 +252,27 @@ def get_youtube_transcript(video_id: str, requested_lang: str | None = None) -> 
         if isinstance(declared_raw, str) and declared_raw.strip():
             declared_lang = declared_raw.strip().split("-")[0]
 
-        # When yt-dlp declares no language, recover it from the title +
-        # description. Without this, a multi-subtitled French video (manual
-        # EN + FR, no declared language) falls through to the manual-English
-        # fallback and is mislabelled English. Only when the user gave no
-        # --language (explicit request always wins) and nothing was declared.
+        # Detect the spoken language from the title + description whenever the
+        # user gave no --language. yt-dlp's declared info["language"] is
+        # unreliable both ways — absent on multi-subtitled videos and sometimes
+        # wrong (a French ARTE upload declared "en") — either of which sends the
+        # ladder to the English track on a French video. Content detection is
+        # the more trustworthy signal, so it takes precedence over the declared
+        # language — but only when the detected language actually has a caption
+        # track, so a mis-detection can't override a declaration it can't satisfy.
         content_lang: str | None = None
-        if requested_lang is None and declared_lang is None:
+        if requested_lang is None:
             content_lang = _detect_content_language(info)
+            if content_lang and not _has_caption(info, content_lang):
+                content_lang = None
 
-        # Implicit preference when the user didn't pass --language: the declared
-        # language, else the content-detected one. The ladder then prefers a
-        # manual track in that language over the manual-English fallback.
-        implicit_lang = declared_lang or content_lang
+        # Implicit preference when the user didn't pass --language: the
+        # content-detected language wins over the declared one (see above); the
+        # ladder then prefers a track in that language over the English fallback.
+        implicit_lang = content_lang or declared_lang
         effective_lang = requested_lang or implicit_lang
         if implicit_lang and requested_lang is None:
-            source = "declared" if declared_lang else "content-detected"
+            source = "content-detected" if content_lang else "declared"
             my_logger.info(
                 f"No --language set; using {source} language '{implicit_lang}' "
                 "as the implicit preference.",

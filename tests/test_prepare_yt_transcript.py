@@ -257,6 +257,43 @@ class TestGetYoutubeTranscript:
         assert track.kind == "manual"
         assert track.declared_language == "fr"
 
+    def test_content_language_overrides_wrong_declared(self) -> None:
+        # Regression for the ARTE case (Wi7zY2PDZL4): yt-dlp declares "en" for a
+        # French video. Content detection (title+description = French) must win
+        # over the wrong declaration and pick the fr track, not the en one.
+        info: dict[str, Any] = {
+            "id": "abc",
+            "language": "en",
+            "title": "Comment les bébés transforment le cerveau des pères",
+            "description": (
+                "Un épisode des Idées Larges sur ARTE consacré à la paternité, "
+                "au cerveau des pères et à la biologie du soin parental chez l'humain."
+            ),
+            "subtitles": {},
+            "automatic_captions": {"fr": [{}], "en": [{}]},
+        }
+        ydl = _ydl_returning(info, write_files={"abc.fr.srt": _SAMPLE_SRT})
+        with patch("scriber.transcription.youtube_captions.yt_dlp.YoutubeDL", ydl):
+            track = get_youtube_transcript("abc")  # no requested_lang
+        assert track.lang == "fr"
+        assert track.declared_language == "fr"
+
+    def test_wrong_declared_kept_when_detected_lang_has_no_track(self) -> None:
+        # Guard: if content detection disagrees with the declaration but the
+        # detected language has no track, don't override — fall back to declared.
+        info: dict[str, Any] = {
+            "id": "abc",
+            "language": "en",
+            "title": "Comment les bébés transforment le cerveau des pères",
+            "description": "Un épisode des Idées Larges sur ARTE sur la paternité.",
+            "subtitles": {},
+            "automatic_captions": {"en": [{}]},  # no fr track available
+        }
+        ydl = _ydl_returning(info, write_files={"abc.en.srt": _SAMPLE_SRT})
+        with patch("scriber.transcription.youtube_captions.yt_dlp.YoutubeDL", ydl):
+            track = get_youtube_transcript("abc")
+        assert track.lang == "en"
+
     def test_explicit_request_skips_content_detection(self) -> None:
         # --language en against a French-content video (no declared language)
         # must still pick EN — explicit request wins, detection is skipped.
