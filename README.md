@@ -29,6 +29,22 @@ recipes (`just lint/typecheck/test/all`) all run against the full environment.
 Requesting a feature whose extra isn't installed (e.g. `--diarize`, or the
 `summarize` subcommand) fails with a message telling you which extra to add.
 
+### YouTube: JavaScript runtime
+
+YouTube URLs need a JS runtime so yt-dlp can solve YouTube's signature / `n`
+challenges. Without one, extraction still works but YouTube hides most audio
+formats (5 of 11 on a sample video), and yt-dlp warns the path is deprecated:
+
+```bash
+winget install DenoLand.Deno     # Windows
+# or: brew install deno / curl -fsSL https://deno.land/install.sh | sh
+```
+
+Deno is the only runtime yt-dlp enables by default; restart your shell after
+installing so it lands on `PATH`. scriber also passes `remote_components:
+["ejs:github"]`, which fetches yt-dlp's challenge-solver script on first use —
+the pip package, unlike the official binaries, doesn't bundle it.
+
 scriber stays **GPU-capable by default** (torch is not pinned to a CPU index).
 For a lean, CPU-only transcription deployment — e.g. installing scriber as a
 standalone `uv tool` — see [docs/BDCOS_INSTALL.md](docs/BDCOS_INSTALL.md).
