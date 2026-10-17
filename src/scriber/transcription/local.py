@@ -9,6 +9,7 @@ The pyannote/torchaudio diarization path lives in
 """
 
 import tempfile
+import warnings
 from pathlib import Path
 from typing import Any, cast
 
@@ -178,19 +179,28 @@ def transcribe_audio_full(
             used_lang = language
             my_logger.info(f"\tForced language: {used_lang}")
 
-        result = model.transcribe(
-            audio_file,
-            fp16=(device == "cuda"),
-            language=used_lang,
-            verbose=False,  # enables whisper's tqdm progress bar
-            # Don't let prior segments bias the next decode. Whisper's
-            # default (True) cascades hallucinations on long files — once
-            # a wrong phrase enters context, the next segment is biased
-            # toward it and the error compounds. See docs/WHISPER_SETUP.md.
-            condition_on_previous_text=False,
-            initial_prompt=initial_prompt,
-            word_timestamps=word_timestamps,
-        )
+        with warnings.catch_warnings():
+            # Word timestamps (--suggest-primer) hit whisper's Triton kernels,
+            # which don't exist on Windows; it falls back to a slower-but-correct
+            # implementation and warns on every window. Nothing to act on.
+            warnings.filterwarnings(
+                "ignore",
+                message=r"Failed to launch Triton kernels",
+                category=UserWarning,
+            )
+            result = model.transcribe(
+                audio_file,
+                fp16=(device == "cuda"),
+                language=used_lang,
+                verbose=False,  # enables whisper's tqdm progress bar
+                # Don't let prior segments bias the next decode. Whisper's
+                # default (True) cascades hallucinations on long files — once
+                # a wrong phrase enters context, the next segment is biased
+                # toward it and the error compounds. See docs/WHISPER_SETUP.md.
+                condition_on_previous_text=False,
+                initial_prompt=initial_prompt,
+                word_timestamps=word_timestamps,
+            )
         segments = cast(list[dict[str, Any]], result.get("segments", []))
         return cast(str, result["text"]), used_lang, segments
     finally:

@@ -328,7 +328,11 @@ def write_primer_draft(transcript: Transcript, settings: Settings) -> Path | Non
     p = settings.output_dir / f"{transcript.title} primer.draft.txt"
     p.parent.mkdir(parents=True, exist_ok=True)
     p.write_text(draft, encoding="utf-8")
-    my_logger.info(f"Primer draft written to {p} — review, then pass via --initial-prompt-file.")
+    # Quote the path: it usually contains spaces (the title), and an unquoted
+    # copy-paste into --initial-prompt-file splits into a bogus extra argument.
+    my_logger.info(
+        f'Primer draft written to {p} — review, then pass via --initial-prompt-file "{p}".'
+    )
     return p
 
 

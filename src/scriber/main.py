@@ -74,12 +74,13 @@ def _maybe_prompt_for_initial_prompt(
     Skipped when:
       - a primer is already loaded (CLI flag or env var)
       - ``--dry-run`` is set
+      - ``--suggest-primer`` is set (this run is the primer-building pass)
       - stdin is not a TTY (scripts / pipes / CI)
       - none of the inputs would route to whisper (text-only batch)
     """
     if settings.initial_prompt is not None:
         return settings
-    if args.dry_run:
+    if args.dry_run or getattr(args, "suggest_primer", False):
         return settings
     if not sys.stdin.isatty():
         return settings

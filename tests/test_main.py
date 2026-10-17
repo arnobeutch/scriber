@@ -61,6 +61,7 @@ def _make_args(**overrides: object) -> MagicMock:
         "context_file": None,
         "no_preprocess": False,
         "initial_prompt_file": None,
+        "suggest_primer": False,
     }
     defaults.update(overrides)
     return MagicMock(**defaults)
@@ -297,6 +298,18 @@ class TestMaybePromptForInitialPrompt:
                 _make_args(input_path=[_URL], dry_run=True),
                 _bare_settings(),
             )
+        assert out.initial_prompt is None
+
+    def test_skipped_when_suggest_primer(self) -> None:
+        with (
+            patch("scriber.main.sys.stdin.isatty", return_value=True),
+            patch("scriber.main.input") as ip,
+        ):
+            out = _maybe_prompt_for_initial_prompt(
+                _make_args(input_path=[_URL], suggest_primer=True),
+                _bare_settings(),
+            )
+        ip.assert_not_called()
         assert out.initial_prompt is None
 
     def test_skipped_when_stdin_not_tty(self) -> None:

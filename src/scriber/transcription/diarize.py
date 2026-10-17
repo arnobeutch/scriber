@@ -102,6 +102,14 @@ def diarize_speakers(
         "pyannote/speaker-diarization-community-1",
         token=hf_token,
     )
+    # Two harmless pyannote warnings on every run, both outside our control:
+    # the TF32-disabled reproducibility notice (we want the reproducible
+    # default), and a std() degrees-of-freedom warning from the pooling layer
+    # on very short chunks.
+    pyannote_noise = (
+        r"TensorFloat-32 \(TF32\) has been disabled",
+        r"std\(\): degrees of freedom is <= 0",
+    )
     # pyannote loads on CPU by default; on long recordings CPU diarization runs
     # at ~realtime and dominates the whole pipeline (e.g. ~2h of a 2h video).
     # Move it to the GPU when available — pyannote streams audio chunks to the
@@ -124,7 +132,10 @@ def diarize_speakers(
     # is the overlap-free turn segmentation pyannote intends for downstream
     # transcription (``speaker_diarization`` keeps overlapping turns). itertracks
     # yields turns in chronological order.
-    diarization = pipeline(diar_input, **hints).exclusive_speaker_diarization
+    with warnings.catch_warnings():
+        for pattern in pyannote_noise:
+            warnings.filterwarnings("ignore", message=pattern, category=UserWarning)
+        diarization = pipeline(diar_input, **hints).exclusive_speaker_diarization
     return [(str(label), segment) for segment, _, label in diarization.itertracks(yield_label=True)]
 
 
