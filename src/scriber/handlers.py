@@ -44,6 +44,37 @@ _SUMMARIZE_EXTRA_HINT = (
 )
 
 
+class WhisperDeferredError(Exception):
+    """Raised when the whisper fallback is refused because of ``max_whisper_duration_sec``.
+
+    The caller is expected to hand the video to a machine that can afford the
+    transcription; ``main`` maps this to exit code 3.
+    """
+
+    def __init__(self, duration_sec: float | None, cap_sec: int) -> None:
+        """Build the stable, greppable message from the duration and the cap."""
+        duration = "unknown" if duration_sec is None else f"{duration_sec:.0f}s"
+        super().__init__(
+            f"Whisper deferred: duration={duration} cap={cap_sec}s — "
+            "no captions, video exceeds the whisper cap",
+        )
+        self.duration_sec = duration_sec
+        self.cap_sec = cap_sec
+
+
+def _enforce_whisper_cap(url: str, settings: Settings) -> None:
+    """Raise ``WhisperDeferredError`` when the video is over the cap or its length is unknown."""
+    cap = settings.max_whisper_duration_sec
+    if cap is None:
+        return
+    duration = pya.fetch_video_metadata(url)[2].duration_seconds
+    if duration is not None and duration <= cap:
+        return
+    exc = WhisperDeferredError(duration, cap)
+    my_logger.warning(str(exc))
+    raise exc
+
+
 def handle_url(args: argparse.Namespace, settings: Settings) -> Transcript:
     """Fetch a YT transcript honoring the language ladder; whisper-fallback if absent.
 
@@ -61,7 +92,11 @@ def handle_url(args: argparse.Namespace, settings: Settings) -> Transcript:
         return _transcribe_url_via_whisper(args, settings, requested_lang, force=force)
 
     try:
-        track = pytt.get_youtube_transcript(video_id, requested_lang=requested_lang)
+        track = pytt.get_youtube_transcript(
+            video_id,
+            requested_lang=requested_lang,
+            retry_delay_sec=settings.captions_retry_delay_sec,
+        )
     except TranscriptUnavailableError as exc:
         log = my_logger.warning if exc.reason == "download_failed" else my_logger.info
         log(
@@ -99,6 +134,7 @@ def _transcribe_url_via_whisper(
     force: bool,
 ) -> Transcript:
     """Download audio and transcribe via whisper (optionally pyannote-diarized)."""
+    _enforce_whisper_cap(args.input_path, settings)
     audio_path, raw_title, chapters, metadata = pya.download_youtube_audio(
         args.input_path,
         settings.downloads_dir,

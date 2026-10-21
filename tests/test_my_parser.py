@@ -328,3 +328,28 @@ class TestSummarizeSubcommand:
             monkeypatch,
         )
         assert ns.llm_model == "anthropic/claude-4.7-sonnet"
+
+
+class TestMaxWhisperDuration:
+    @pytest.mark.parametrize("command", ["transcribe", "summarize"])
+    def test_flag_parsed_on_both_subcommands(
+        self,
+        command: str,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        ns = _run_parser(
+            [command, "https://y.com/watch?v=x", "--max-whisper-duration", "2700"],
+            monkeypatch,
+        )
+        assert ns.max_whisper_duration == 2700
+
+    def test_default_is_none(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        ns = _run_parser(["transcribe", "https://y.com/watch?v=x"], monkeypatch)
+        assert ns.max_whisper_duration is None
+
+    def test_non_integer_rejected(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        with pytest.raises(SystemExit):
+            _run_parser(
+                ["transcribe", "https://y.com/watch?v=x", "--max-whisper-duration", "soon"],
+                monkeypatch,
+            )

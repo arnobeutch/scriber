@@ -89,6 +89,7 @@ Flags shared by `transcribe` and `summarize`:
 | `-l`, `--language` | `en` or `fr`. Default: autodetect (for `--diarize`, sampled across several speech segments rather than just the first 30s, so a music/intro prelude no longer skews detection). Used as a *hint* for caption-track selection and to force whisper's transcription language. **Pass it for known-language sources** to skip detection entirely. The summary always tracks the source's language (English fallback for anything other than en/fr). |
 | `--diarize` | Identify speakers when transcribing local media (default: False). Uses transcribe-then-assign: one whisper pass + pyannote speaker turns, joined by timestamp. |
 | `--min-speakers` / `--max-speakers` | Constrain the diarization speaker count when the panel size is known (e.g. `--min-speakers 2 --max-speakers 4`). Default from `MIN_SPEAKERS` / `MAX_SPEAKERS` env, or let pyannote decide. |
+| `--max-whisper-duration SECONDS` | Refuse the whisper fallback for YouTube videos longer than this, or of unknown duration: no audio download, no transcript, exit code **3**. Applies to the caption fallback and to `--diarize`; videos with captions are unaffected. Default from `MAX_WHISPER_DURATION_SEC` env, or no cap. |
 | `--model-size` | Whisper model: `tiny`, `base`, `small`, `medium`, `large`, `large-v3`, `large-v3-turbo`. Default from `WHISPER_MODEL_SIZE` env or `large-v3-turbo` (best WER among CPU-practical models; faster than `medium` on the same hardware). Pick `small` for a speed-first draft; `medium` is functionally obsolete. |
 | `--output-dir` | Where outputs land. Default from `OUTPUT_DIR` env or `./results`. |
 | `--downloads-dir` | Where downloaded YT audio is cached. Default from `DOWNLOADS_DIR` env or `./downloads`. |
@@ -131,7 +132,11 @@ For YouTube URLs the caption track is picked top-down (manual beats auto across 
 4. Auto captions in `--language` (if set) — or declared video language when `--language` is unset
 5. Auto captions in English
 6. Auto captions in any other language
-7. *No captions* → fall back to whisper
+7. *No captions* → fall back to whisper, unless the video exceeds `--max-whisper-duration` (exit code 3, nothing downloaded)
+
+A caption download that fails with `HTTP Error 429` is retried once after `CAPTIONS_RETRY_DELAY_SEC` seconds before the ladder gives up on that track.
+
+Exit codes: `0` ok, `1` an input failed, `2` preflight failure (missing extra or API key), `3` whisper fallback refused by `--max-whisper-duration`. With `--continue-on-error`, a refused input is recorded as failed and the run exits `1`.
 
 Once a track is picked, the summary language is derived:
 
@@ -169,6 +174,8 @@ Runtime settings are loaded by `Settings.from_env()` (reads `.env` + `os.environ
 | `PREPROCESS_AUDIO` | `true` | Apply `alimiter=0.95,dynaudnorm` ffmpeg filter chain before whisper. `false`/`0`/`off` disables. CLI `--no-preprocess` also disables. |
 | `INITIAL_PROMPT_FILE` | — | Path to a primer text file. Loaded at process start; the content (not the path) is passed to whisper as `initial_prompt`. CLI `--initial-prompt-file` overrides. |
 | `MIN_SPEAKERS` / `MAX_SPEAKERS` | — | Diarization speaker-count hints for `--diarize`. CLI `--min-speakers` / `--max-speakers` override. |
+| `MAX_WHISPER_DURATION_SEC` | — | Cap on the whisper fallback for YouTube videos, in seconds. Unset or empty = no cap. CLI `--max-whisper-duration` overrides. |
+| `CAPTIONS_RETRY_DELAY_SEC` | `60` | Wait before the single retry of a caption download that failed with `HTTP Error 429`. `0` disables the retry. |
 
 ## Logging
 

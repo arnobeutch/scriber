@@ -131,6 +131,8 @@ _ALL_ENV_KEYS = (
     "SUMMARY_MODE",
     "MIN_SPEAKERS",
     "MAX_SPEAKERS",
+    "MAX_WHISPER_DURATION_SEC",
+    "CAPTIONS_RETRY_DELAY_SEC",
 )
 
 
@@ -245,3 +247,47 @@ class TestSettingsFromEnv:
         s = Settings.from_env()
         assert s.min_speakers is None
         assert s.max_speakers is None
+
+    def test_whisper_cap_and_retry_delay_defaults(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+        tmp_path: Path,
+    ) -> None:
+        _clean_env(monkeypatch, tmp_path)
+        s = Settings.from_env()
+        assert s.max_whisper_duration_sec is None
+        assert s.captions_retry_delay_sec == 60
+
+    def test_whisper_cap_and_retry_delay_from_env(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+        tmp_path: Path,
+    ) -> None:
+        _clean_env(monkeypatch, tmp_path)
+        monkeypatch.setenv("MAX_WHISPER_DURATION_SEC", "2700")
+        monkeypatch.setenv("CAPTIONS_RETRY_DELAY_SEC", "0")
+        s = Settings.from_env()
+        assert s.max_whisper_duration_sec == 2700
+        assert s.captions_retry_delay_sec == 0
+
+    def test_blank_or_invalid_whisper_cap_means_no_cap(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+        tmp_path: Path,
+    ) -> None:
+        _clean_env(monkeypatch, tmp_path)
+        monkeypatch.setenv("MAX_WHISPER_DURATION_SEC", "  ")
+        assert Settings.from_env().max_whisper_duration_sec is None
+        monkeypatch.setenv("MAX_WHISPER_DURATION_SEC", "soon")
+        assert Settings.from_env().max_whisper_duration_sec is None
+
+    def test_invalid_retry_delay_falls_back_to_default(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+        tmp_path: Path,
+    ) -> None:
+        _clean_env(monkeypatch, tmp_path)
+        monkeypatch.setenv("CAPTIONS_RETRY_DELAY_SEC", "soon")
+        assert Settings.from_env().captions_retry_delay_sec == 60
+        monkeypatch.setenv("CAPTIONS_RETRY_DELAY_SEC", "-5")
+        assert Settings.from_env().captions_retry_delay_sec == 0

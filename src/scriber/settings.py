@@ -16,6 +16,7 @@ _DEFAULT_LLM_PROVIDER = "openai"
 _DEFAULT_WRAP_WIDTH = 80
 _DEFAULT_SUMMARY_MODE = "auto"
 _DEFAULT_PREPROCESS_AUDIO = True
+_DEFAULT_CAPTIONS_RETRY_DELAY_SEC = 60
 
 
 def _bool_from_env(value: str | None, *, default: bool) -> bool:
@@ -33,6 +34,14 @@ def _int_from_env(value: str | None) -> int | None:
         return int(value.strip())
     except ValueError:
         return None
+
+
+def _retry_delay_from_env(value: str | None) -> int:
+    """Parse ``CAPTIONS_RETRY_DELAY_SEC``; unset/blank/invalid → default, negatives → 0."""
+    parsed = _int_from_env(value)
+    if parsed is None:
+        return _DEFAULT_CAPTIONS_RETRY_DELAY_SEC
+    return max(parsed, 0)
 
 
 def load_text_file(path: Path | None) -> str | None:
@@ -92,6 +101,8 @@ class Settings:
     preprocess_audio: bool = _DEFAULT_PREPROCESS_AUDIO
     min_speakers: int | None = None  # diarization hint; None lets pyannote decide
     max_speakers: int | None = None
+    max_whisper_duration_sec: int | None = None  # None → no cap on the whisper fallback
+    captions_retry_delay_sec: int = _DEFAULT_CAPTIONS_RETRY_DELAY_SEC  # 0 disables the 429 retry
     initial_prompt: str | None = None
     """Resolved primer text (vocabulary hint for whisper). Loaded from the
     ``INITIAL_PROMPT_FILE`` env var, the ``--initial-prompt-file`` CLI flag,
@@ -125,6 +136,10 @@ class Settings:
             ),
             min_speakers=_int_from_env(os.environ.get("MIN_SPEAKERS")),
             max_speakers=_int_from_env(os.environ.get("MAX_SPEAKERS")),
+            max_whisper_duration_sec=_int_from_env(os.environ.get("MAX_WHISPER_DURATION_SEC")),
+            captions_retry_delay_sec=_retry_delay_from_env(
+                os.environ.get("CAPTIONS_RETRY_DELAY_SEC"),
+            ),
             initial_prompt=load_text_file(
                 Path(p) if (p := os.environ.get("INITIAL_PROMPT_FILE")) else None,
             ),

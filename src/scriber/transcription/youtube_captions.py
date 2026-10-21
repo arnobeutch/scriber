@@ -18,6 +18,7 @@ from __future__ import annotations
 import re
 import tempfile
 import textwrap
+import time
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Literal, cast
@@ -181,7 +182,43 @@ def _extract_text_from_subtitle_file(path: Path) -> str:
     return " ".join(lines)
 
 
-def get_youtube_transcript(video_id: str, requested_lang: str | None = None) -> CaptionTrack:
+def _is_rate_limited(exc: DownloadError) -> bool:
+    return "HTTP Error 429" in str(exc)
+
+
+def _download_captions(
+    dl_opts: Any,  # yt-dlp opts are an untyped dict
+    url: str,
+    *,
+    retry_delay_sec: int,
+) -> None:
+    """Run the caption download, retrying once after ``retry_delay_sec`` on HTTP 429.
+
+    One retry only: repeated requests extend YouTube's throttling. A delay of 0
+    disables the retry. Any other ``DownloadError`` propagates untouched.
+    """
+    try:
+        with yt_dlp.YoutubeDL(dl_opts) as ydl:
+            ydl.extract_info(url, download=True)
+    except DownloadError as exc:
+        if retry_delay_sec <= 0 or not _is_rate_limited(exc):
+            raise
+        my_logger.warning(
+            f"Caption download rate-limited (HTTP 429): {exc} — "
+            f"retrying once in {retry_delay_sec}s.",
+        )
+        time.sleep(retry_delay_sec)
+        with yt_dlp.YoutubeDL(dl_opts) as ydl:
+            ydl.extract_info(url, download=True)
+        my_logger.warning("Caption download retry succeeded.")
+
+
+def get_youtube_transcript(
+    video_id: str,
+    requested_lang: str | None = None,
+    *,
+    retry_delay_sec: int = 60,
+) -> CaptionTrack:
     """Fetch a YouTube transcript honoring the language-selection ladder.
 
     Args:
@@ -190,6 +227,8 @@ def get_youtube_transcript(video_id: str, requested_lang: str | None = None) -> 
         requested_lang: Optional preferred language code (typically
             ``"fr"`` or ``"en"``). When set, manual @ this lang outranks
             manual @ English.
+        retry_delay_sec: Seconds to wait before the single retry of a caption
+            download that failed with HTTP 429. ``0`` disables the retry.
 
     Raises:
         TranscriptUnavailableError: No usable caption track is retrievable.
@@ -307,8 +346,7 @@ def get_youtube_transcript(video_id: str, requested_lang: str | None = None) -> 
             "remote_components": ["ejs:github"],
         }
         try:
-            with yt_dlp.YoutubeDL(dl_opts) as ydl:
-                ydl.extract_info(url, download=True)
+            _download_captions(dl_opts, url, retry_delay_sec=retry_delay_sec)
         except DownloadError as exc:
             raise TranscriptUnavailableError(
                 "download_failed",

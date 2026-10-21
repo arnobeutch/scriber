@@ -472,7 +472,16 @@ Narrower error paths inside the pipeline:
 
 - **`TranscriptUnavailableError`** in the YT caption fetch → falls
   through to whisper audio download in `handle_url`. Not a user-facing
-  error.
+  error. A caption download failing with `HTTP Error 429` is retried
+  once after `captions_retry_delay_sec` (default 60 s, `0` disables)
+  before it becomes `download_failed`.
+- **`WhisperDeferredError`** (`handlers`) — raised before any audio
+  download when `Settings.max_whisper_duration_sec` is set and the video
+  is longer than the cap or has no known duration. Covers the caption
+  fallback and `--diarize`; videos with captions never reach it. Logged
+  at WARNING (`Whisper deferred: duration=… cap=… — …`). `main` exits
+  with code **3** (0 ok, 1 input failure, 2 preflight) — or, with
+  `--continue-on-error`, records the input as failed (run exits 1).
 - **`MissingAPIKeyError`** from the summarizer factory → preflighted
   before any transcription, `sys.exit(2)` with a pointed message.
 - **`openai.AuthenticationError` / `APITimeoutError` / `OpenAIError`**
@@ -496,8 +505,10 @@ CLI flag > env var > .env file > Settings default
 ```
 
 That single ordering applies to `output_dir`, `downloads_dir`,
-`whisper_model_size`, `llm_provider`, `llm_model`, `summary_mode`, and
-`log_level`. Adding a new configurable value means:
+`whisper_model_size`, `llm_provider`, `llm_model`, `summary_mode`,
+`max_whisper_duration_sec` (`--max-whisper-duration` / `MAX_WHISPER_DURATION_SEC`,
+default none), and `log_level`. `captions_retry_delay_sec`
+(`CAPTIONS_RETRY_DELAY_SEC`, default 60) is env-only. Adding a new configurable value means:
 
 1. Add a field to `Settings` with a default.
 2. Map it in `Settings.from_env`.

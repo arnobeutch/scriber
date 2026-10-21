@@ -98,6 +98,19 @@ def _add_shared_args(sub: argparse.ArgumentParser) -> None:
         ),
     )
     sub.add_argument(
+        "--max-whisper-duration",
+        dest="max_whisper_duration",
+        type=int,
+        metavar="SECONDS",
+        default=None,
+        help=(
+            "Refuse the whisper fallback for YouTube videos longer than this "
+            "(or of unknown duration): no audio download, exit code 3. Captions "
+            "are used regardless of length. Default: env MAX_WHISPER_DURATION_SEC, "
+            "or no cap."
+        ),
+    )
+    sub.add_argument(
         "--model-size",
         dest="model_size",
         choices={"tiny", "base", "small", "medium", "large", "large-v3", "large-v3-turbo"},

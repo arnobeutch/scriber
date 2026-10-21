@@ -13,7 +13,8 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from scriber.main import _maybe_prompt_for_initial_prompt, main
+from scriber.handlers import WhisperDeferredError
+from scriber.main import _apply_cli_overrides, _maybe_prompt_for_initial_prompt, main
 from scriber.settings import Settings
 
 if TYPE_CHECKING:
@@ -62,6 +63,7 @@ def _make_args(**overrides: object) -> MagicMock:
         "no_preprocess": False,
         "initial_prompt_file": None,
         "suggest_primer": False,
+        "max_whisper_duration": None,
     }
     defaults.update(overrides)
     return MagicMock(**defaults)
@@ -274,6 +276,67 @@ class TestDispatcher:
         # Both inputs attempted; non-zero exit because one failed.
         assert h_url.call_count == 2
         assert excinfo.value.code == 1
+
+    def test_whisper_deferred_exits_3_for_single_input(
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        monkeypatch.chdir(tmp_path)
+        with (
+            patch("scriber.main.parser.parse_args") as parse,
+            patch("scriber.main.initialize_logger"),
+            patch("scriber.main.parser.classify_input", return_value=_URL_CLASSIFICATION),
+            patch(
+                "scriber.main.handlers.handle_url",
+                side_effect=WhisperDeferredError(3600, 2700),
+            ),
+            patch("scriber.main.handlers.write_transcript_file") as write,
+        ):
+            parse.return_value = _make_args()
+            with pytest.raises(SystemExit) as excinfo:
+                main()
+        assert excinfo.value.code == 3
+        write.assert_not_called()  # no transcript file
+
+    def test_whisper_deferred_with_continue_on_error_is_a_recorded_failure(
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        monkeypatch.chdir(tmp_path)
+        url2 = "https://y.com/watch?v=y"
+        with (
+            patch("scriber.main.parser.parse_args") as parse,
+            patch("scriber.main.initialize_logger"),
+            patch("scriber.main.parser.classify_input", return_value=_URL_CLASSIFICATION),
+            patch(
+                "scriber.main.handlers.handle_url",
+                side_effect=[WhisperDeferredError(3600, 2700), _make_transcript()],
+            ) as h_url,
+            patch("scriber.main.handlers.write_transcript_file"),
+        ):
+            parse.return_value = _make_args(input_path=[_URL, url2], continue_on_error=True)
+            with pytest.raises(SystemExit) as excinfo:
+                main()
+        assert h_url.call_count == 2
+        assert excinfo.value.code == 1
+
+
+class TestApplyCliOverridesWhisperCap:
+    def test_cli_flag_beats_env_setting(self) -> None:
+        base = Settings(max_whisper_duration_sec=2700)
+        out = _apply_cli_overrides(_make_args(max_whisper_duration=900), base)
+        assert out.max_whisper_duration_sec == 900
+
+    def test_env_setting_kept_without_cli_flag(self) -> None:
+        base = Settings(max_whisper_duration_sec=2700)
+        out = _apply_cli_overrides(_make_args(), base)
+        assert out.max_whisper_duration_sec == 2700
+
+    def test_default_is_no_cap(self) -> None:
+        out = _apply_cli_overrides(_make_args(), Settings())
+        assert out.max_whisper_duration_sec is None
 
 
 def _bare_settings() -> Settings:

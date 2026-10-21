@@ -15,6 +15,8 @@ from scriber import handlers, parser
 from scriber.logger import initialize_logger, my_logger
 from scriber.settings import Settings, load_text_file
 
+_EXIT_WHISPER_DEFERRED = 3  # 0 ok, 1 input failure, 2 preflight
+
 
 @dataclass(frozen=True)
 class _InputResult:
@@ -50,6 +52,7 @@ def _apply_cli_overrides(args: argparse.Namespace, base: Settings) -> Settings:
             initial_prompt = loaded
     min_speakers = getattr(args, "min_speakers", None)
     max_speakers = getattr(args, "max_speakers", None)
+    max_whisper_duration = getattr(args, "max_whisper_duration", None)
     return dataclasses.replace(
         base,
         output_dir=args.output_dir or base.output_dir,
@@ -62,6 +65,11 @@ def _apply_cli_overrides(args: argparse.Namespace, base: Settings) -> Settings:
         initial_prompt=initial_prompt,
         min_speakers=min_speakers if min_speakers is not None else base.min_speakers,
         max_speakers=max_speakers if max_speakers is not None else base.max_speakers,
+        max_whisper_duration_sec=(
+            max_whisper_duration
+            if max_whisper_duration is not None
+            else base.max_whisper_duration_sec
+        ),
     )
 
 
@@ -243,6 +251,8 @@ def main() -> None:
             )
         except Exception as exc:
             if not getattr(args, "continue_on_error", False):
+                if isinstance(exc, handlers.WhisperDeferredError):
+                    sys.exit(_EXIT_WHISPER_DEFERRED)
                 raise
             # Top-level batch boundary — capture anything so one bad input
             # doesn't kill the rest of the run.

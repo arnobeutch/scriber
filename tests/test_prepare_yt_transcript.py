@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+from contextlib import nullcontext
 from pathlib import Path
 from typing import Any
 from unittest.mock import MagicMock, patch
@@ -392,6 +393,94 @@ class TestGetYoutubeTranscript:
         ):
             get_youtube_transcript("abc")
         assert excinfo.value.reason == "download_failed"
+
+    @staticmethod
+    def _retry_ctxs(
+        info: dict[str, Any],
+        download_outcomes: list[Exception | None],
+    ) -> tuple[MagicMock, list[MagicMock]]:
+        """YoutubeDL factory: one info ctx, then one dl ctx per outcome (None = success)."""
+        ctx_info = MagicMock()
+        ctx_info.extract_info.return_value = info
+        ctx_info.__enter__.return_value = ctx_info
+        ctx_info.__exit__.return_value = False
+
+        dl_ctxs: list[MagicMock] = []
+        for outcome in download_outcomes:
+            ctx = MagicMock()
+            if outcome is not None:
+                ctx.extract_info.side_effect = outcome
+            ctx.__enter__.return_value = ctx
+            ctx.__exit__.return_value = False
+            dl_ctxs.append(ctx)
+        return MagicMock(side_effect=[ctx_info, *dl_ctxs]), dl_ctxs
+
+    def test_429_then_success_retries_once_after_delay(self, tmp_path: Path) -> None:
+        info: dict[str, Any] = {"id": "abc", "subtitles": {"en": [{}]}, "automatic_captions": {}}
+        factory, dl_ctxs = self._retry_ctxs(
+            info,
+            [DownloadError("HTTP Error 429: Too Many Requests"), None],
+        )
+
+        def _write_srt(_url: str, *, download: bool = True) -> dict[str, Any]:
+            assert download
+            (tmp_path / "abc.en.srt").write_text(_SAMPLE_SRT, encoding="utf-8")
+            return {}
+
+        dl_ctxs[1].extract_info.side_effect = _write_srt
+        with (
+            patch("scriber.transcription.youtube_captions.yt_dlp.YoutubeDL", factory),
+            patch(
+                "scriber.transcription.youtube_captions.tempfile.TemporaryDirectory",
+                return_value=nullcontext(str(tmp_path)),
+            ),
+            patch("scriber.transcription.youtube_captions.time.sleep") as sleep,
+        ):
+            track = get_youtube_transcript("abc", retry_delay_sec=7)
+        assert "Hello world" in track.text
+        sleep.assert_called_once_with(7)
+        assert dl_ctxs[0].extract_info.call_count == 1
+        assert dl_ctxs[1].extract_info.call_count == 1
+
+    def test_429_twice_keeps_download_failed(self) -> None:
+        info: dict[str, Any] = {"id": "abc", "subtitles": {"en": [{}]}, "automatic_captions": {}}
+        factory, dl_ctxs = self._retry_ctxs(
+            info,
+            [DownloadError("HTTP Error 429: x"), DownloadError("HTTP Error 429: y")],
+        )
+        with (
+            patch("scriber.transcription.youtube_captions.yt_dlp.YoutubeDL", factory),
+            patch("scriber.transcription.youtube_captions.time.sleep") as sleep,
+            pytest.raises(TranscriptUnavailableError) as excinfo,
+        ):
+            get_youtube_transcript("abc", retry_delay_sec=7)
+        assert excinfo.value.reason == "download_failed"
+        sleep.assert_called_once_with(7)  # one retry, not a loop
+        assert all(c.extract_info.call_count == 1 for c in dl_ctxs)
+
+    def test_non_429_error_is_not_retried(self) -> None:
+        info: dict[str, Any] = {"id": "abc", "subtitles": {"en": [{}]}, "automatic_captions": {}}
+        factory, _ = self._retry_ctxs(info, [DownloadError("HTTP Error 403: Forbidden")])
+        with (
+            patch("scriber.transcription.youtube_captions.yt_dlp.YoutubeDL", factory),
+            patch("scriber.transcription.youtube_captions.time.sleep") as sleep,
+            pytest.raises(TranscriptUnavailableError) as excinfo,
+        ):
+            get_youtube_transcript("abc", retry_delay_sec=7)
+        assert excinfo.value.reason == "download_failed"
+        sleep.assert_not_called()
+
+    def test_zero_delay_disables_retry(self) -> None:
+        info: dict[str, Any] = {"id": "abc", "subtitles": {"en": [{}]}, "automatic_captions": {}}
+        factory, _ = self._retry_ctxs(info, [DownloadError("HTTP Error 429: x")])
+        with (
+            patch("scriber.transcription.youtube_captions.yt_dlp.YoutubeDL", factory),
+            patch("scriber.transcription.youtube_captions.time.sleep") as sleep,
+            pytest.raises(TranscriptUnavailableError) as excinfo,
+        ):
+            get_youtube_transcript("abc", retry_delay_sec=0)
+        assert excinfo.value.reason == "download_failed"
+        sleep.assert_not_called()
 
     def test_listed_but_no_file_raises_empty_payload(self) -> None:
         # Track is listed but yt-dlp doesn't actually write the file.

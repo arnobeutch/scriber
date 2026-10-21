@@ -9,6 +9,7 @@ import pytest
 
 from scriber.handlers import (
     Transcript,
+    WhisperDeferredError,
     handle_media,
     handle_text,
     handle_url,
@@ -571,3 +572,140 @@ class TestSummarize:
             summarize(t, _args(input_path="u", context_file=empty), s)
         _, kwargs = fake.summarize.call_args
         assert kwargs["context"] is None
+
+
+_URL = "https://y.com/watch?v=vid"
+
+
+class TestWhisperDurationCap:
+    """``max_whisper_duration_sec`` gates only the whisper path, before any download."""
+
+    @staticmethod
+    def _run(
+        tmp_path: Path,
+        *,
+        cap: int | None,
+        duration: float | None,
+        captions: bool = False,
+        diarize: bool = False,
+    ) -> tuple[Transcript | None, MagicMock, MagicMock, MagicMock, WhisperDeferredError | None]:
+        s = _settings(
+            output_dir=tmp_path / "out",
+            downloads_dir=tmp_path / "dl",
+            max_whisper_duration_sec=cap,
+        )
+        get_captions = MagicMock()
+        if captions:
+            get_captions.return_value = _track()
+        else:
+            get_captions.side_effect = TranscriptUnavailableError("lang_not_found", "no caps")
+        with (
+            patch("scriber.handlers.pya.extract_video_id", return_value="vid"),
+            patch("scriber.handlers.pytt.get_youtube_transcript", get_captions),
+            patch(
+                "scriber.handlers.pya.fetch_video_metadata",
+                return_value=("Vid", [], _md(duration_seconds=duration)),
+            ) as fetch_meta,
+            patch(
+                "scriber.handlers.pya.download_youtube_audio",
+                return_value=(tmp_path / "audio.wav", "Vid", [], _md()),
+            ) as download,
+            patch(
+                "scriber.handlers.plt.transcribe_audio_full",
+                return_value=("whisper body", "en", []),
+            ) as whisper,
+            patch(
+                "scriber.transcription.diarize.transcribe_audio_with_diarization",
+                return_value=("SPEAKER_00: hi", "en", []),
+            ) as diarized,
+        ):
+            try:
+                t = handle_url(_args(input_path=_URL, diarize=diarize), s)
+            except WhisperDeferredError as exc:
+                return None, download, whisper if not diarize else diarized, fetch_meta, exc
+        return t, download, whisper if not diarize else diarized, fetch_meta, None
+
+    def test_over_cap_no_captions_defers_without_download_or_whisper(self, tmp_path: Path) -> None:
+        t, download, whisper, _, exc = self._run(tmp_path, cap=2700, duration=3600)
+        assert t is None
+        assert exc is not None
+        assert (exc.duration_sec, exc.cap_sec) == (3600, 2700)
+        download.assert_not_called()
+        whisper.assert_not_called()
+
+    def test_under_cap_no_captions_runs_whisper(self, tmp_path: Path) -> None:
+        t, download, whisper, _, exc = self._run(tmp_path, cap=2700, duration=600)
+        assert exc is None
+        assert t is not None
+        assert t.source == "whisper"
+        download.assert_called_once()
+        whisper.assert_called_once()
+
+    def test_exactly_at_cap_is_allowed(self, tmp_path: Path) -> None:
+        t, _, _, _, exc = self._run(tmp_path, cap=2700, duration=2700)
+        assert exc is None
+        assert t is not None
+
+    def test_unknown_duration_with_cap_defers(self, tmp_path: Path) -> None:
+        _, download, whisper, _, exc = self._run(tmp_path, cap=2700, duration=None)
+        assert exc is not None
+        assert exc.duration_sec is None
+        assert "duration=unknown cap=2700s" in str(exc)
+        download.assert_not_called()
+        whisper.assert_not_called()
+
+    def test_captions_found_ignores_cap(self, tmp_path: Path) -> None:
+        t, download, whisper, _, exc = self._run(
+            tmp_path,
+            cap=60,
+            duration=99999,
+            captions=True,
+        )
+        assert exc is None
+        assert t is not None
+        assert t.source == "yt_manual"
+        download.assert_not_called()
+        whisper.assert_not_called()
+
+    def test_diarize_over_cap_defers(self, tmp_path: Path) -> None:
+        _, download, diarized, _, exc = self._run(tmp_path, cap=2700, duration=3600, diarize=True)
+        assert exc is not None
+        download.assert_not_called()
+        diarized.assert_not_called()
+
+    def test_no_cap_never_fetches_duration(self, tmp_path: Path) -> None:
+        t, download, _, fetch_meta, exc = self._run(tmp_path, cap=None, duration=99999)
+        assert exc is None
+        assert t is not None
+        download.assert_called_once()
+        fetch_meta.assert_not_called()
+
+    def test_message_and_warning_log(
+        self, tmp_path: Path, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        with caplog.at_level("WARNING"):
+            _, _, _, _, exc = self._run(tmp_path, cap=2700, duration=3600)
+        expected = (
+            "Whisper deferred: duration=3600s cap=2700s — "
+            "no captions, video exceeds the whisper cap"
+        )
+        assert exc is not None
+        assert str(exc) == expected
+        assert expected in caplog.text
+
+    def test_retry_delay_setting_reaches_caption_fetch(self, tmp_path: Path) -> None:
+        s = _settings(
+            output_dir=tmp_path / "out",
+            downloads_dir=tmp_path / "dl",
+            captions_retry_delay_sec=11,
+        )
+        with (
+            patch("scriber.handlers.pya.extract_video_id", return_value="vid"),
+            patch("scriber.handlers.pya.fetch_video_metadata", return_value=("V", [], _md())),
+            patch(
+                "scriber.handlers.pytt.get_youtube_transcript",
+                return_value=_track(),
+            ) as get_captions,
+        ):
+            handle_url(_args(input_path=_URL), s)
+        get_captions.assert_called_once_with("vid", requested_lang=None, retry_delay_sec=11)
